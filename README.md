@@ -4,22 +4,23 @@ Auction is an experimental item-valuation and marketplace-intelligence applicati
 
 ## Current Status
 
-**Runnable valuation-core prototype + active Base44 application.**
+**Runnable valuation engine + marketplace connector foundation + active Base44 application.**
 
-This GitHub repository now contains a small, independently runnable valuation core with automated tests. The working Base44 UI/application source has not yet been exported because direct source access is unavailable through the connected Base44 workspace.
+This GitHub repository contains an independently runnable valuation core with automated tests and an official eBay Browse API connector. The working Base44 UI/application source has not yet been exported because direct source access is unavailable through the connected Base44 workspace.
 
-The GitHub implementation therefore focuses on verified backend behavior rather than pretending the unavailable Base44 source is already mirrored here.
+## Implemented Backend Behavior
 
-## What Works in This Repository
-
-The current valuation core can:
-
-- distinguish explicit sold evidence from asking-price evidence
-- deduplicate comparables using source identifiers
-- weight sold evidence more strongly than asking prices
-- account for comparable similarity
-- reject weak evidence rather than returning false precision
-- run automatically through GitHub Actions on pushes and pull requests
+- sold versus asking-price evidence classification
+- comparable deduplication
+- USD price normalization
+- robust extreme-outlier filtering
+- similarity-aware evidence weighting
+- stronger weighting for sold evidence
+- valuation ranges and confidence scoring
+- insufficient-evidence responses instead of fabricated certainty
+- marketplace connector registry
+- official eBay Browse API search connector for active/asking-price evidence
+- automated GitHub Actions test workflow
 
 ## Run Locally
 
@@ -31,7 +32,23 @@ cd Auction-
 npm test
 ```
 
-No API credentials are required for the current deterministic valuation-core tests.
+Deterministic tests do not require marketplace credentials.
+
+## eBay Connector
+
+Auction's first real marketplace adapter targets eBay's official Browse API. Create an eBay developer application/OAuth access token, copy `.env.example` to your local environment configuration, and provide `EBAY_ACCESS_TOKEN` at runtime.
+
+The connector deliberately labels Browse API search results as **asking-price evidence**. Active listings are not treated as completed sales.
+
+```js
+import { searchMarketplace } from './src/connectors/index.js';
+
+const listings = await searchMarketplace('ebay', 'vintage camera model x', {
+  accessToken: process.env.EBAY_ACCESS_TOKEN
+});
+```
+
+No real credentials belong in GitHub.
 
 ## Product Goal
 
@@ -72,8 +89,12 @@ Evidence-backed Result
 ```text
 src/
   valuation.js
+  connectors/
+    index.js
+    ebay.js
 test/
   valuation.test.js
+  ebay-connector.test.js
 .github/workflows/
   tests.yml
 docs/
@@ -81,6 +102,7 @@ docs/
   ROADMAP.md
   DATA_QUALITY.md
   SECURITY.md
+.env.example
 ```
 
 ## Engineering Principles
@@ -94,13 +116,12 @@ docs/
 
 ## Next Engineering Milestones
 
-- expand deterministic price normalization and outlier handling
-- define a normalized marketplace connector contract
-- integrate the first permitted real marketplace/data source
-- add confidence scoring and valuation ranges
-- add fixture-based accuracy benchmarks
+- add fixture-based valuation accuracy benchmarks
+- add retry, timeout, and rate-limit behavior around marketplace connectors
+- add a separate source of legitimate sold-price evidence
+- add item-query planning and comparable similarity scoring
 - export and sanitize the Base44 application source when workspace access permits it
-- connect the tested valuation core to the application UI
+- connect the tested valuation pipeline to the application UI
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the broader staged plan.
 
