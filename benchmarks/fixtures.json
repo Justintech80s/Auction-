@@ -1,0 +1,21 @@
+[
+  {
+    "name": "stable sold evidence",
+    "knownValue": 105,
+    "comparables": [
+      { "source": "fixture", "sourceId": "s1", "price": 100, "currency": "USD", "status": "sold", "similarity": 1 },
+      { "source": "fixture", "sourceId": "s2", "price": 105, "currency": "USD", "status": "sold", "similarity": 1 },
+      { "source": "fixture", "sourceId": "s3", "price": 110, "currency": "USD", "status": "sold", "similarity": 1 }
+    ]
+  },
+  {
+    "name": "sold evidence with inflated asking outlier",
+    "knownValue": 205,
+    "comparables": [
+      { "source": "fixture", "sourceId": "m1", "price": 195, "currency": "USD", "status": "sold", "similarity": 0.95 },
+      { "source": "fixture", "sourceId": "m2", "price": 205, "currency": "USD", "status": "sold", "similarity": 1 },
+      { "source": "fixture", "sourceId": "m3", "price": 215, "currency": "USD", "status": "sold", "similarity": 0.95 },
+      { "source": "fixture", "sourceId": "m4", "price": 1500, "currency": "USD", "status": "active", "similarity": 0.8 }
+    ]
+  }
+]
