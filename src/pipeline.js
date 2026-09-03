@@ -1,5 +1,6 @@
 import { buildSearchQuery, rankComparables } from './intelligence.js';
 import { estimateValue } from './valuation.js';
+import { evaluateOpportunity } from './opportunity.js';
 import { searchMarketplace } from './connectors/index.js';
 import { validateGuardianRequest } from './security/gateway.js';
 import { assessRisk } from './security/risk-engine.js';
@@ -51,7 +52,17 @@ export async function valueItem(item = {}, options = {}) {
     valuation
   };
 
-  if (!options.guardian) return base;
+  if (!options.guardian) {
+    if (options.acquisitionPrice == null) return base;
+    return {
+      ...base,
+      opportunity: evaluateOpportunity({
+        acquisitionPrice: options.acquisitionPrice,
+        valuation,
+        targetMarginPct: options.targetMarginPct
+      })
+    };
+  }
 
   const security = assessRisk({ item, comparables, valuation });
   const ai = await runSecurityBrain({
@@ -61,10 +72,21 @@ export async function valueItem(item = {}, options = {}) {
     timeoutMs: options.aiTimeoutMs ?? 1500
   });
 
-  return {
+  const result = {
     ...base,
     security,
     ai,
     provenance: buildProvenance(comparables)
   };
+
+  if (options.acquisitionPrice != null) {
+    result.opportunity = evaluateOpportunity({
+      acquisitionPrice: options.acquisitionPrice,
+      valuation,
+      security,
+      targetMarginPct: options.targetMarginPct
+    });
+  }
+
+  return result;
 }
