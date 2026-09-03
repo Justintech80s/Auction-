@@ -45,16 +45,75 @@ function roundMoney(value) {
   return Math.round(value * 100) / 100;
 }
 
-function calculateConfidence(items, soldCount) {
+function roundScore(value) {
+  return Math.round(value * 100) / 100;
+}
+
+function verificationLevel(item) {
+  return String(item?.verification || '').toLowerCase();
+}
+
+function soldConfidenceAuthority(item) {
+  if (classifyEvidence(item) !== 'sold') return 0;
+
+  const verification = verificationLevel(item);
+  if (verification === 'verified_sale') return 1;
+  if (verification === 'seller_scoped_sale') return 0.6;
+  if (verification === 'unverified_sale_claim') return 0;
+
+  // Preserve legacy deterministic behavior for sold evidence created before
+  // verification metadata existed. New provider records should always declare it.
+  return 1;
+}
+
+function valuationWeight(item) {
+  if (classifyEvidence(item) !== 'sold') return 0.5;
+
+  const verification = verificationLevel(item);
+  if (verification === 'verified_sale') return 2.5;
+  if (verification === 'seller_scoped_sale') return 1.25;
+  if (verification === 'unverified_sale_claim') return 0.25;
+
+  return 2;
+}
+
+function soldQualityScore(item) {
+  if (classifyEvidence(item) !== 'sold') return null;
+
+  const verification = verificationLevel(item);
+  let verificationScore = 0;
+  if (verification === 'verified_sale') verificationScore = 1;
+  else if (verification === 'seller_scoped_sale') verificationScore = 0.6;
+  else if (verification === 'unverified_sale_claim') verificationScore = 0;
+
+  const freshnessMultiplier = item?.freshness?.isRecent === false ? 0.5 : 1;
+  return verificationScore * freshnessMultiplier;
+}
+
+function summarizeEvidence(items) {
+  const sold = items.filter((item) => classifyEvidence(item) === 'sold');
+  const qualityScores = sold.map(soldQualityScore).filter((score) => score !== null);
+
+  return {
+    soldCount: sold.length,
+    askingCount: items.length - sold.length,
+    verifiedSoldCount: sold.filter((item) => verificationLevel(item) === 'verified_sale').length,
+    soldEvidenceQuality: qualityScores.length
+      ? roundScore(qualityScores.reduce((sum, score) => sum + score, 0) / qualityScores.length)
+      : 0
+  };
+}
+
+function calculateConfidence(items) {
   if (!items.length) return 0;
   const sampleScore = Math.min(1, items.length / 6);
-  const soldScore = soldCount / items.length;
+  const soldScore = items.reduce((sum, item) => sum + soldConfidenceAuthority(item), 0) / items.length;
   const similarityScore = items.reduce((sum, item) => sum + item.similarity, 0) / items.length;
   const prices = items.map((item) => item.price);
   const avg = prices.reduce((sum, price) => sum + price, 0) / prices.length;
   const spread = avg ? (Math.max(...prices) - Math.min(...prices)) / avg : 1;
   const agreementScore = Math.max(0, 1 - Math.min(1, spread));
-  return Math.round((sampleScore * 0.25 + soldScore * 0.3 + similarityScore * 0.25 + agreementScore * 0.2) * 100) / 100;
+  return roundScore(sampleScore * 0.25 + soldScore * 0.3 + similarityScore * 0.25 + agreementScore * 0.2);
 }
 
 export function estimateValue(comparables) {
@@ -74,8 +133,7 @@ export function estimateValue(comparables) {
       confidence: 0,
       evidenceCount: normalized.length,
       outlierCount: 0,
-      soldCount: normalized.filter((item) => classifyEvidence(item) === 'sold').length,
-      askingCount: normalized.filter((item) => classifyEvidence(item) === 'asking').length
+      ...summarizeEvidence(normalized)
     };
   }
 
@@ -83,25 +141,23 @@ export function estimateValue(comparables) {
   const outlierCount = normalized.length - strong.length;
   if (strong.length < 2) {
     return {
-      status: 'insufficient_evidence', estimate: null, range: null, confidence: 0,
-      evidenceCount: strong.length, outlierCount,
-      soldCount: 0, askingCount: strong.length
+      status: 'insufficient_evidence',
+      estimate: null,
+      range: null,
+      confidence: 0,
+      evidenceCount: strong.length,
+      outlierCount,
+      ...summarizeEvidence(strong)
     };
   }
 
   let weightedSum = 0;
   let totalWeight = 0;
-  let soldCount = 0;
-  let askingCount = 0;
 
   for (const item of strong) {
-    const evidence = classifyEvidence(item);
-    const evidenceWeight = evidence === 'sold' ? 2 : 0.5;
-    const weight = evidenceWeight * item.similarity;
+    const weight = valuationWeight(item) * item.similarity;
     weightedSum += item.price * weight;
     totalWeight += weight;
-    if (evidence === 'sold') soldCount += 1;
-    else askingCount += 1;
   }
 
   const estimate = roundMoney(weightedSum / totalWeight);
@@ -113,10 +169,9 @@ export function estimateValue(comparables) {
     status: 'ok',
     estimate,
     range: { low: roundMoney(low), high: roundMoney(high) },
-    confidence: calculateConfidence(strong, soldCount),
+    confidence: calculateConfidence(strong),
     evidenceCount: strong.length,
     outlierCount,
-    soldCount,
-    askingCount
+    ...summarizeEvidence(strong)
   };
 }
