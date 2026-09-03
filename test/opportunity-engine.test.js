@@ -45,7 +45,8 @@ test('computes a confidence-adjusted maximum recommended bid', () => {
     targetMarginPct: 25
   });
 
-  assert.equal(result.maxRecommendedBid, 60);
+  // Conservative bid ceiling: downside valuation × confidence × retained value after target margin.
+  assert.equal(result.maxRecommendedBid, 45);
   assert.equal(result.expectedProfit, 30);
 });
 
