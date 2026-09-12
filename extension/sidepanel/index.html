@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Auction Shopping Assistant</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="panel-shell" aria-live="polite">
+    <header class="panel-header">
+      <div>
+        <p class="eyebrow">AUCTION</p>
+        <h1 id="panel-title">Ready to analyze</h1>
+      </div>
+      <span id="panel-state" class="state-pill">idle</span>
+    </header>
+
+    <p id="panel-message" class="panel-message">Open a supported product page to begin.</p>
+
+    <section id="analysis-result" class="analysis-card" hidden>
+      <div class="product-block">
+        <p class="label">Product</p>
+        <h2 id="product-title">—</h2>
+      </div>
+
+      <dl class="metrics-grid">
+        <div class="metric"><dt>Current Price</dt><dd id="current-price">—</dd></div>
+        <div class="metric"><dt>Estimated Value</dt><dd id="estimated-value">—</dd></div>
+        <div class="metric"><dt>Value Range</dt><dd id="value-range">—</dd></div>
+        <div class="metric"><dt>Potential Profit</dt><dd id="potential-profit">—</dd></div>
+        <div class="metric"><dt>Confidence</dt><dd id="confidence">—</dd></div>
+        <div class="metric"><dt>Verified Sold</dt><dd id="verified-sold-count">0</dd></div>
+      </dl>
+
+      <section class="decision-card" aria-labelledby="decision-heading">
+        <p id="decision-heading" class="label">Auction Decision</p>
+        <strong id="decision" class="decision">manual_review</strong>
+      </section>
+
+      <div class="evidence-row">
+        <div><span class="label">Guardian</span><strong id="risk-state">unknown</strong></div>
+        <div><span class="label">Sold Evidence</span><strong id="sold-evidence-state">not_configured</strong></div>
+      </div>
+    </section>
+
+    <button id="analyze-again" type="button" class="primary-action" hidden>Analyze Again</button>
+
+    <footer>
+      <p>Recommendations come from Auction's valuation, sold-evidence, Opportunity, and Guardian pipeline.</p>
+    </footer>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
