@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 
 import {
   createAuctionAnalysisHandler,
@@ -9,6 +10,7 @@ import {
   MESSAGE_TYPES,
   createExtensionMessage
 } from '../extension/messaging/messages.js';
+import { createContentBootstrap } from '../extension/content/index.js';
 
 function product(overrides = {}) {
   return {
@@ -164,4 +166,83 @@ test('service worker rejects malformed browser products without calling Auction'
   assert.equal(response.type, MESSAGE_TYPES.ANALYSIS_ERROR);
   assert.equal(response.payload.code, 'INVALID_MESSAGE');
   assert.equal(calls, 0);
+});
+
+test('manifest v3 exposes only the supported shopping domains and side panel', async () => {
+  const raw = await readFile(new URL('../extension/manifest.json', import.meta.url), 'utf8');
+  const manifest = JSON.parse(raw);
+
+  assert.equal(manifest.manifest_version, 3);
+  assert.deepEqual(manifest.permissions, ['sidePanel']);
+  assert.equal(manifest.side_panel.default_path, 'sidepanel/index.html');
+  assert.equal(manifest.background.service_worker, 'service-worker.js');
+  assert.equal(manifest.background.type, 'module');
+  assert.deepEqual(manifest.host_permissions, [
+    'https://www.ebay.com/*',
+    'https://www.amazon.com/*',
+    'https://www.walmart.com/*',
+    'https://www.bestbuy.com/*'
+  ]);
+  assert.deepEqual(manifest.content_scripts[0].matches, manifest.host_permissions);
+  assert.deepEqual(manifest.content_scripts[0].js, ['content/index.js']);
+  assert.equal(manifest.content_scripts[0].type, 'module');
+  assert.ok(!JSON.stringify(manifest).includes('<all_urls>'));
+  assert.ok(!manifest.permissions.includes('storage'));
+});
+
+test('content bootstrap scans immediately and emits a normalized detected product', async () => {
+  const detected = product();
+  const sent = [];
+  let observerCallback = null;
+  let started = 0;
+  let stopped = 0;
+
+  const bootstrap = createContentBootstrap({
+    locationLike: { href: detected.url },
+    documentLike: {},
+    runtime: {
+      async sendMessage(message) {
+        sent.push(message);
+        return undefined;
+      }
+    },
+    scan: () => ({ status: 'detected', product: detected, adapter: 'amazon' }),
+    createObserver: ({ onChange }) => {
+      observerCallback = onChange;
+      return {
+        start() { started += 1; },
+        stop() { stopped += 1; }
+      };
+    },
+    now: () => new Date('2026-09-12T20:00:00.000Z')
+  });
+
+  await bootstrap.start();
+
+  assert.equal(started, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].type, MESSAGE_TYPES.PRODUCT_DETECTED);
+  assert.equal(sent[0].payload.product.url, detected.url);
+
+  observerCallback({ reason: 'url', url: detected.url });
+  await bootstrap.flush();
+  assert.equal(sent.length, 2);
+
+  bootstrap.stop();
+  assert.equal(stopped, 1);
+});
+
+test('content bootstrap does not emit unsupported or invalid pages', async () => {
+  const sent = [];
+  const bootstrap = createContentBootstrap({
+    locationLike: { href: 'https://www.amazon.com/s?k=walkman' },
+    documentLike: {},
+    runtime: { async sendMessage(message) { sent.push(message); } },
+    scan: () => ({ status: 'unsupported', product: null, adapter: 'amazon' }),
+    createObserver: () => ({ start() {}, stop() {} })
+  });
+
+  await bootstrap.start();
+  assert.deepEqual(sent, []);
+  bootstrap.stop();
 });
