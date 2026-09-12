@@ -8,7 +8,10 @@ const DECISIONS = new Set([
 ]);
 
 function finiteNumber(value) {
-  return Number.isFinite(Number(value)) ? Number(value) : null;
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && !value.trim()) return null;
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized : null;
 }
 
 function normalizeRange(range) {
@@ -44,11 +47,9 @@ export function buildAnalysisViewModel(analysis = {}, product = {}) {
   const opportunity = analysis?.opportunity;
   const soldEvidence = analysis?.soldEvidence || {};
 
-  const verifiedSoldCount = Number.isFinite(Number(soldEvidence.verifiedCount))
-    ? Number(soldEvidence.verifiedCount)
-    : Number.isFinite(Number(valuation.verifiedSoldCount))
-      ? Number(valuation.verifiedSoldCount)
-      : 0;
+  const soldVerifiedCount = finiteNumber(soldEvidence.verifiedCount);
+  const valuationVerifiedCount = finiteNumber(valuation.verifiedSoldCount);
+  const verifiedSoldCount = soldVerifiedCount ?? valuationVerifiedCount ?? 0;
 
   return Object.freeze({
     productTitle: String(product?.title || '').trim() || 'Unknown product',
