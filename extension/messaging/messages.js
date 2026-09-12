@@ -9,6 +9,7 @@ export const MESSAGE_TYPES = Object.freeze({
 
 const SUPPORTED_TYPES = new Set(Object.values(MESSAGE_TYPES));
 const MAX_MESSAGE_BYTES = 64 * 1024;
+const utf8Encoder = new TextEncoder();
 
 function isPlainObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -18,7 +19,7 @@ function isPlainObject(value) {
 
 function serializedSize(value) {
   try {
-    return Buffer.byteLength(JSON.stringify(value), 'utf8');
+    return utf8Encoder.encode(JSON.stringify(value)).byteLength;
   } catch {
     throw new TypeError('message must be JSON serializable');
   }
