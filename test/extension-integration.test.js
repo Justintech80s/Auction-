@@ -33,22 +33,12 @@ function product(overrides = {}) {
 function askingComparables() {
   return [
     {
-      source: 'ebay',
-      sourceId: 'ask-1',
-      title: 'Sony WM-2 Walkman Portable Cassette Player',
-      price: 185,
-      currency: 'USD',
-      status: 'active',
-      url: 'https://www.ebay.com/itm/1'
+      source: 'ebay', sourceId: 'ask-1', title: 'Sony WM-2 Walkman Portable Cassette Player',
+      price: 185, currency: 'USD', status: 'active', url: 'https://www.ebay.com/itm/1'
     },
     {
-      source: 'ebay',
-      sourceId: 'ask-2',
-      title: 'Sony WM-2 Portable Cassette Player Walkman',
-      price: 215,
-      currency: 'USD',
-      status: 'active',
-      url: 'https://www.ebay.com/itm/2'
+      source: 'ebay', sourceId: 'ask-2', title: 'Sony WM-2 Portable Cassette Player Walkman',
+      price: 215, currency: 'USD', status: 'active', url: 'https://www.ebay.com/itm/2'
     }
   ];
 }
@@ -73,9 +63,7 @@ function fakeRuntime() {
 
 test('analysis handler delegates to the existing Auction pipeline with Guardian enabled', async () => {
   const analyze = createAuctionAnalysisHandler({
-    pipelineOptions: {
-      search: async () => askingComparables()
-    }
+    pipelineOptions: { search: async () => askingComparables() }
   });
 
   const result = await analyze(product());
@@ -88,15 +76,35 @@ test('analysis handler delegates to the existing Auction pipeline with Guardian 
   assert.ok(Array.isArray(result.provenance));
 });
 
+test('analysis handler forwards explicit costs into the authoritative pipeline', async () => {
+  let receivedOptions = null;
+  const analyze = createAuctionAnalysisHandler({
+    valueItemImpl: async (_item, options) => {
+      receivedOptions = options;
+      return {
+        valuation: { status: 'ok', estimate: 200, confidence: 0.8 },
+        opportunity: { decision: 'buy', netProfit: 64 },
+        soldEvidence: { status: 'not_configured', verifiedCount: 0 },
+        security: { decision: 'allow' },
+        provenance: []
+      };
+    }
+  });
+
+  await analyze(product(), { shipping: 15, repairs: 21 });
+
+  assert.equal(receivedOptions.guardian, true);
+  assert.equal(receivedOptions.acquisitionPrice, 100);
+  assert.deepEqual(receivedOptions.costs, { shipping: 15, repairs: 21 });
+});
+
 test('sold provider failures safely preserve asking-evidence valuation', async () => {
   const analyze = createAuctionAnalysisHandler({
     pipelineOptions: {
       search: async () => askingComparables(),
       soldEvidenceProvider: {
         name: 'failing-provider',
-        async searchSoldEvidence() {
-          throw new Error('secret upstream details');
-        }
+        async searchSoldEvidence() { throw new Error('secret upstream details'); }
       }
     }
   });
@@ -143,10 +151,7 @@ test('service worker rejects malformed browser products without calling Auction'
   let calls = 0;
   const worker = createAuctionServiceWorker({
     runtime,
-    valueItemImpl: async () => {
-      calls += 1;
-      return {};
-    }
+    valueItemImpl: async () => { calls += 1; return {}; }
   });
 
   worker.start();
@@ -154,11 +159,7 @@ test('service worker rejects malformed browser products without calling Auction'
     type: MESSAGE_TYPES.ANALYSIS_REQUEST,
     payload: {
       product: {
-        source: 'amazon',
-        url: 'http://not-secure.example/item',
-        title: '',
-        price: -10,
-        currency: 'USD'
+        source: 'amazon', url: 'http://not-secure.example/item', title: '', price: -10, currency: 'USD'
       }
     }
   });
@@ -178,10 +179,7 @@ test('manifest v3 exposes only required permissions and supported shopping domai
   assert.equal(manifest.background.service_worker, 'service-worker.js');
   assert.equal(manifest.background.type, 'module');
   assert.deepEqual(manifest.host_permissions, [
-    'https://www.ebay.com/*',
-    'https://www.amazon.com/*',
-    'https://www.walmart.com/*',
-    'https://www.bestbuy.com/*'
+    'https://www.ebay.com/*', 'https://www.amazon.com/*', 'https://www.walmart.com/*', 'https://www.bestbuy.com/*'
   ]);
   assert.deepEqual(manifest.content_scripts[0].matches, manifest.host_permissions);
   assert.deepEqual(manifest.content_scripts[0].js, ['content/entry.js']);
@@ -189,11 +187,8 @@ test('manifest v3 exposes only required permissions and supported shopping domai
   assert.equal(manifest.content_scripts[0].type, undefined);
   assert.deepEqual(manifest.web_accessible_resources, [{
     resources: [
-      'content/index.js',
-      'content/scanner.js',
-      'content/page-observer.js',
-      'adapters/*.js',
-      'messaging/messages.js'
+      'content/index.js', 'content/scanner.js', 'content/page-observer.js',
+      'adapters/*.js', 'messaging/messages.js'
     ],
     matches: manifest.host_permissions
   }]);
@@ -210,25 +205,16 @@ test('content bootstrap scans immediately and emits a normalized detected produc
   const bootstrap = createContentBootstrap({
     locationLike: { href: detected.url },
     documentLike: {},
-    runtime: {
-      async sendMessage(message) {
-        sent.push(message);
-        return undefined;
-      }
-    },
+    runtime: { async sendMessage(message) { sent.push(message); return undefined; } },
     scan: () => ({ status: 'detected', product: detected, adapter: 'amazon' }),
     createObserver: ({ onChange }) => {
       observerCallback = onChange;
-      return {
-        start() { started += 1; },
-        stop() { stopped += 1; }
-      };
+      return { start() { started += 1; }, stop() { stopped += 1; } };
     },
     now: () => new Date('2026-09-12T20:00:00.000Z')
   });
 
   await bootstrap.start();
-
   assert.equal(started, 1);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].type, MESSAGE_TYPES.PRODUCT_DETECTED);

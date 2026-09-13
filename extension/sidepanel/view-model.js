@@ -50,6 +50,7 @@ export function buildAnalysisViewModel(analysis = {}, product = {}) {
   const soldVerifiedCount = finiteNumber(soldEvidence.verifiedCount);
   const valuationVerifiedCount = finiteNumber(valuation.verifiedSoldCount);
   const verifiedSoldCount = soldVerifiedCount ?? valuationVerifiedCount ?? 0;
+  const costsApplied = opportunity?.costsApplied === true;
 
   return Object.freeze({
     productTitle: String(product?.title || '').trim() || 'Unknown product',
@@ -59,6 +60,10 @@ export function buildAnalysisViewModel(analysis = {}, product = {}) {
     valueRange: normalizeRange(valuation?.range),
     verifiedSoldCount,
     potentialProfit: opportunity ? finiteNumber(opportunity.expectedProfit) : null,
+    totalCosts: costsApplied ? finiteNumber(opportunity.totalCosts) : null,
+    netProfit: costsApplied ? finiteNumber(opportunity.netProfit) : null,
+    netMarginPct: costsApplied ? finiteNumber(opportunity.netMarginPct) : null,
+    costsApplied,
     confidence: finiteNumber(valuation?.confidence) ?? 0,
     decision: normalizedDecision(opportunity),
     decisionReason: normalizedReason(opportunity),

@@ -51,6 +51,44 @@ test('analysis requests preserve only normalized product fields', () => {
   assert.equal(Object.isFrozen(message.payload.product), true);
 });
 
+test('analysis requests preserve only allowlisted non-negative explicit costs', () => {
+  const message = createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, {
+    product,
+    costs: {
+      marketplaceFee: 12.5,
+      shipping: 8,
+      tax: 3.25,
+      repairs: 0,
+      paymentProcessing: 2.1,
+      holding: 1,
+      secretFeeGuess: 999
+    }
+  });
+
+  assert.deepEqual(message.payload.costs, {
+    marketplaceFee: 12.5,
+    shipping: 8,
+    tax: 3.25,
+    repairs: 0,
+    paymentProcessing: 2.1,
+    holding: 1
+  });
+  assert.equal('secretFeeGuess' in message.payload.costs, false);
+  assert.equal(Object.isFrozen(message.payload.costs), true);
+});
+
+test('analysis requests reject negative or non-finite costs', () => {
+  assert.throws(() => createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, {
+    product,
+    costs: { shipping: -1 }
+  }), /shipping/i);
+
+  assert.throws(() => createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, {
+    product,
+    costs: { tax: Number.POSITIVE_INFINITY }
+  }), /tax/i);
+});
+
 test('rejects unrecognized and oversized messages', () => {
   assert.throws(
     () => validateExtensionMessage({ type: 'NOT_A_REAL_MESSAGE', payload: {} }),
@@ -94,11 +132,13 @@ test('maps normalized product data to Auction item and acquisition inputs withou
   assert.equal('strongBuyThreshold' in mapped, false);
 });
 
-test('auction client sends only normalized product data to analyze and returns a result message', async () => {
-  let received = null;
+test('auction client sends normalized product and explicit costs to analyze', async () => {
+  let receivedProduct = null;
+  let receivedCosts = null;
   const client = createAuctionClient({
-    analyze: async (normalizedProduct) => {
-      received = normalizedProduct;
+    analyze: async (normalizedProduct, costs) => {
+      receivedProduct = normalizedProduct;
+      receivedCosts = costs;
       return {
         valuation: { status: 'ok', estimate: 210, confidence: 0.83 },
         opportunity: { decision: 'buy' }
@@ -109,12 +149,14 @@ test('auction client sends only normalized product data to analyze and returns a
   const response = await client.handleMessage({
     type: MESSAGE_TYPES.ANALYSIS_REQUEST,
     payload: {
-      product: { ...product, secretPageField: 'must be stripped' }
+      product: { ...product, secretPageField: 'must be stripped' },
+      costs: { shipping: 9.5, repairs: 12 }
     }
   });
 
-  assert.deepEqual(received, product);
-  assert.equal('secretPageField' in received, false);
+  assert.deepEqual(receivedProduct, product);
+  assert.equal('secretPageField' in receivedProduct, false);
+  assert.deepEqual(receivedCosts, { shipping: 9.5, repairs: 12 });
   assert.equal(response.type, MESSAGE_TYPES.ANALYSIS_RESULT);
   assert.equal(response.payload.analysis.opportunity.decision, 'buy');
 });

@@ -75,13 +75,58 @@ h2 {
 .product-block,
 .metric,
 .decision-card,
-.evidence-row {
+.evidence-row,
+.cost-card {
   border: 1px solid #273044;
   border-radius: 14px;
   background: rgba(20, 25, 36, .92);
 }
 
-.product-block, .decision-card { padding: 15px; }
+.product-block, .decision-card, .cost-card { padding: 15px; }
+
+.cost-card {
+  display: grid;
+  gap: 14px;
+}
+
+.helper-text {
+  margin: 8px 0 0;
+  color: #8f9bb0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.cost-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.cost-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cost-field span {
+  font-size: 11px;
+  color: #aeb8c8;
+}
+
+.cost-field input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #354158;
+  border-radius: 10px;
+  padding: 10px 11px;
+  background: #0f141d;
+  color: #f5f7fb;
+}
+
+.cost-field input:focus-visible {
+  outline: 3px solid #8dafff;
+  outline-offset: 1px;
+}
 
 .metrics-grid {
   margin: 0;
@@ -155,5 +200,5 @@ footer p { margin-bottom: 0; }
 [hidden] { display: none !important; }
 
 @media (max-width: 360px) {
-  .metrics-grid, .evidence-row { grid-template-columns: 1fr; }
+  .metrics-grid, .evidence-row, .cost-grid { grid-template-columns: 1fr; }
 }
