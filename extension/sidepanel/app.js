@@ -1,5 +1,6 @@
 import { buildAnalysisViewModel } from './view-model.js';
 import { MESSAGE_TYPES, createExtensionMessage } from '../messaging/messages.js';
+import { createWatchlistStore } from '../storage/watchlist.js';
 
 const PANEL_COPY = Object.freeze({
   idle: Object.freeze({ title: 'Ready to analyze', message: 'Open a supported product page to begin.' }),
@@ -80,6 +81,7 @@ export function renderPanel(documentLike, panel) {
   setText(documentLike, 'panel-state', panel.state);
   setHidden(documentLike, 'analysis-result', !resultVisible);
   setHidden(documentLike, 'analyze-again', !resultVisible);
+  setHidden(documentLike, 'save-item', !resultVisible);
 
   if (!resultVisible) return;
 
@@ -95,21 +97,33 @@ export function renderPanel(documentLike, panel) {
   setText(documentLike, 'sold-evidence-state', panel.soldEvidenceState);
 }
 
-export function createSidePanelApp({ documentLike, runtime } = {}) {
+export function createSidePanelApp({ documentLike, runtime, watchlistStore = null } = {}) {
   if (!documentLike) throw new TypeError('documentLike is required');
   if (!runtime || typeof runtime.sendMessage !== 'function') throw new TypeError('runtime is required');
+  if (watchlistStore !== null && typeof watchlistStore?.save !== 'function') {
+    throw new TypeError('watchlistStore must provide save');
+  }
 
   let lastProduct = null;
+  let lastAnalysis = null;
 
-  const show = (state, viewModel) => renderPanel(documentLike, buildPanelState(state, viewModel));
+  const show = (state, viewModel) => {
+    const panel = buildPanelState(state, viewModel);
+    renderPanel(documentLike, panel);
+    if (!watchlistStore) setHidden(documentLike, 'save-item', true);
+  };
 
   async function analyze(product) {
     if (!product) {
+      lastProduct = null;
+      lastAnalysis = null;
       show('unsupported');
       return;
     }
 
     lastProduct = product;
+    lastAnalysis = null;
+    setText(documentLike, 'save-item', 'Save');
     show('analyzing');
 
     try {
@@ -119,10 +133,27 @@ export function createSidePanelApp({ documentLike, runtime } = {}) {
         show('error');
         return;
       }
-      const viewModel = buildAnalysisViewModel(response.payload.analysis, product);
+      lastAnalysis = response.payload.analysis;
+      const viewModel = buildAnalysisViewModel(lastAnalysis, product);
       show('result', viewModel);
     } catch {
+      lastAnalysis = null;
       show('error');
+    }
+  }
+
+  async function saveCurrent() {
+    if (!watchlistStore || !lastProduct || !lastAnalysis) return;
+    const button = documentLike.getElementById?.('save-item');
+    if (button) button.disabled = true;
+
+    try {
+      await watchlistStore.save(lastProduct, lastAnalysis);
+      setText(documentLike, 'save-item', 'Saved');
+    } catch {
+      setText(documentLike, 'save-item', 'Save failed');
+    } finally {
+      if (button) button.disabled = false;
     }
   }
 
@@ -135,10 +166,14 @@ export function createSidePanelApp({ documentLike, runtime } = {}) {
 
   runtime.onMessage?.addListener?.(onMessage);
   documentLike.getElementById?.('analyze-again')?.addEventListener?.('click', () => void analyze(lastProduct));
+  if (watchlistStore) {
+    documentLike.getElementById?.('save-item')?.addEventListener?.('click', saveCurrent);
+  }
   show('idle');
 
   return Object.freeze({
     analyze,
+    saveCurrent,
     render: show,
     destroy() {
       runtime.onMessage?.removeListener?.(onMessage);
@@ -148,6 +183,12 @@ export function createSidePanelApp({ documentLike, runtime } = {}) {
 
 if (typeof document !== 'undefined' && globalThis.chrome?.runtime) {
   document.addEventListener('DOMContentLoaded', () => {
-    createSidePanelApp({ documentLike: document, runtime: globalThis.chrome.runtime });
+    const storageArea = globalThis.chrome?.storage?.local;
+    const watchlistStore = storageArea ? createWatchlistStore(storageArea) : null;
+    createSidePanelApp({
+      documentLike: document,
+      runtime: globalThis.chrome.runtime,
+      watchlistStore
+    });
   }, { once: true });
 }
