@@ -20,7 +20,7 @@ Supported U.S. shopping domains:
 
 Safari is not part of this build. A future Safari Web Extension would require a separate Xcode packaging/conversion step.
 
-## Install Locally in Chrome
+## Build and Install Locally
 
 Requirements: Node.js 20 or newer and a local clone of this repository.
 
@@ -37,15 +37,25 @@ Requirements: Node.js 20 or newer and a local clone of this repository.
    npm test
    ```
 
-3. Open `chrome://extensions` in Chrome.
-4. Enable **Developer mode**.
-5. Choose **Load unpacked**.
-6. Select this repository's `extension/` directory.
-7. Open a supported product page and open the **Auction Shopping Assistant** side panel.
+3. Build the self-contained unpacked extension package.
 
-For Microsoft Edge, use `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the same `extension/` directory.
+   ```bash
+   npm run build:extension
+   ```
 
-After changing extension source files locally, return to the browser's extensions page and reload the unpacked extension.
+   The builder creates `dist/auction-extension/`. This release directory contains the Manifest V3 files plus the Auction pipeline modules required by the service worker, with all imports kept inside the extension package boundary.
+
+4. Open `chrome://extensions` in Chrome.
+5. Enable **Developer mode**.
+6. Choose **Load unpacked**.
+7. Select `dist/auction-extension/`.
+8. Open a supported product page and open the **Auction Shopping Assistant** side panel.
+
+For Microsoft Edge, use `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the same `dist/auction-extension/` directory.
+
+After changing extension or pipeline source files locally, rerun `npm run build:extension`, then reload the unpacked extension from the browser's extensions page.
+
+Do not load the source `extension/` directory directly as the release package. The service worker depends on Auction pipeline modules that are assembled into the self-contained `dist/auction-extension/` build.
 
 ## What the Extension Does
 
@@ -94,7 +104,7 @@ Active marketplace listings are **asking-price evidence**. They are never relabe
 
 Live verified sold evidence depends on a configured data provider and any approval or credentials that provider requires. If a sold-evidence provider is not configured or is unavailable, the extension must show that state instead of inventing sold history. Provider failure can degrade to available asking-price analysis, but it must not bypass Guardian or create stronger evidence than Auction actually has.
 
-No provider credentials belong in the extension bundle or in GitHub.
+No provider credentials belong in the extension bundle or in GitHub. The release package intentionally contains no credentials. Production live-provider calls should use a controlled credential boundary rather than embedding secrets in the extension.
 
 ## Permissions
 
@@ -139,10 +149,14 @@ Key controls include:
 - supported-domain manifest restrictions
 - no arbitrary page-controlled network destination
 - no remote executable code
+- no `eval` or dynamic `Function` execution in the release package
+- no HTML injection sinks for marketplace-controlled strings
 - no silent checkout or purchase automation
 - Guardian remains authoritative for review/reject decisions
 - the side panel cannot override or strengthen Auction's recommendation
 - asking evidence cannot masquerade as verified sold evidence
+- browser-safe environment access that does not assume Node's `process` global exists
+- a self-contained release package whose runtime imports do not escape the extension root
 
 ## Watchlist Save Behavior
 
@@ -150,12 +164,18 @@ After a successful analysis, the side panel exposes a real **Save** control. Sav
 
 Saving the same canonical product URL again updates that product instead of creating a duplicate. The store exposes save, remove, and list operations and cleans malformed persisted records when reading the watchlist.
 
-## Testing
+## Testing and Release Security Gate
 
 Run the full deterministic test suite with:
 
 ```bash
 npm test
+```
+
+Build the installable unpacked package with:
+
+```bash
+npm run build:extension
 ```
 
 The repository includes tests for:
@@ -169,6 +189,12 @@ The repository includes tests for:
 - side-panel view-model behavior and rendering helpers
 - Manifest V3 domain/permission boundaries
 - watchlist sanitization, deduplication, eviction, removal, and malformed-record cleanup
+- release-package self-containment
+- absence of `<all_urls>`
+- absence of dynamic executable code and remote script imports
+- absence of HTML injection sinks in release code
+- absence of obvious credential material in the release package
+- absence of Node-only `process.env` access in browser-shipped modules
 
 Live marketplace DOM checks should be treated as manual smoke tests because retail sites can change markup independently of this repository.
 
@@ -179,7 +205,7 @@ Live marketplace DOM checks should be treated as manual smoke tests because reta
 - Safari packaging is not included yet.
 - The extension does not purchase items or automate checkout.
 - The local watchlist does not sync across browsers or devices.
-- Live sold evidence remains dependent on approved/configured provider access.
+- Live provider-backed asking/sold evidence still requires approved provider access and a secure runtime credential boundary; credentials are not packaged with the extension.
 - Asking-price analysis can still be useful when sold evidence is unavailable, but the UI must clearly report the evidence state.
 
 ## Repository Locations
@@ -194,6 +220,15 @@ extension/
   sidepanel/
   storage/
 
+scripts/
+  build-extension.mjs
+
+src/
+  ...Auction analysis pipeline modules copied into the release package at build time
+
+dist/auction-extension/
+  ...generated unpacked extension package (gitignored)
+
 test/
   extension-adapter-contract.test.js
   extension-adapters.test.js
@@ -204,6 +239,7 @@ test/
   extension-view-model.test.js
   extension-sidepanel.test.js
   extension-watchlist.test.js
+  extension-release-security.test.js
 ```
 
 Auction's browser layer is deliberately kept separate from its decision authority: the extension detects, transports, renders, and saves bounded local summaries; the existing Auction pipeline decides.
