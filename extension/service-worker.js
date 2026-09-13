@@ -32,7 +32,7 @@ export function createAuctionAnalysisHandler({
     throw new TypeError('pipeline options must be an object');
   }
 
-  return async function analyzeProduct(product) {
+  return async function analyzeProduct(product, costs) {
     const mapped = mapProductToAuctionInput(product);
     const item = {
       ...mapped.item,
@@ -44,7 +44,8 @@ export function createAuctionAnalysisHandler({
       source: 'ebay',
       ...pipelineOptions,
       guardian: true,
-      acquisitionPrice: mapped.acquisitionPrice
+      acquisitionPrice: mapped.acquisitionPrice,
+      ...(costs === undefined ? {} : { costs })
     });
 
     return projectAuctionResult(result);
