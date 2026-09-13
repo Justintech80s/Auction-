@@ -168,12 +168,12 @@ test('service worker rejects malformed browser products without calling Auction'
   assert.equal(calls, 0);
 });
 
-test('manifest v3 exposes only the supported shopping domains and side panel', async () => {
+test('manifest v3 exposes only required permissions and supported shopping domains', async () => {
   const raw = await readFile(new URL('../extension/manifest.json', import.meta.url), 'utf8');
   const manifest = JSON.parse(raw);
 
   assert.equal(manifest.manifest_version, 3);
-  assert.deepEqual(manifest.permissions, ['sidePanel']);
+  assert.deepEqual(manifest.permissions, ['sidePanel', 'storage']);
   assert.equal(manifest.side_panel.default_path, 'sidepanel/index.html');
   assert.equal(manifest.background.service_worker, 'service-worker.js');
   assert.equal(manifest.background.type, 'module');
@@ -198,7 +198,6 @@ test('manifest v3 exposes only the supported shopping domains and side panel', a
     matches: manifest.host_permissions
   }]);
   assert.ok(!JSON.stringify(manifest).includes('<all_urls>'));
-  assert.ok(!manifest.permissions.includes('storage'));
 });
 
 test('content bootstrap scans immediately and emits a normalized detected product', async () => {
