@@ -1,6 +1,7 @@
 import { buildAnalysisViewModel } from './view-model.js';
 import { MESSAGE_TYPES, createExtensionMessage } from '../messaging/messages.js';
 import { createWatchlistStore } from '../storage/watchlist.js';
+import { createCostPresetStore } from '../storage/cost-presets.js';
 
 const PANEL_COPY = Object.freeze({
   idle: Object.freeze({ title: 'Ready to analyze', message: 'Open a supported product page to begin.' }),
@@ -25,14 +26,10 @@ export function formatMoney(value, currency = 'USD') {
   if (!Number.isFinite(normalized)) return '—';
   try {
     return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: String(currency || 'USD').toUpperCase(),
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
+      style: 'currency', currency: String(currency || 'USD').toUpperCase(),
+      minimumFractionDigits: 2, maximumFractionDigits: 2
     }).format(normalized);
-  } catch {
-    return '—';
-  }
+  } catch { return '—'; }
 }
 
 export function formatPercent(value) {
@@ -60,28 +57,32 @@ export function readCostInputs(documentLike) {
   if (!documentLike?.getElementById) return undefined;
   const costs = {};
   let supplied = false;
-
   for (const [field, id, label] of COST_INPUTS) {
     const raw = String(documentLike.getElementById(id)?.value ?? '').trim();
     if (!raw) continue;
     const value = Number(raw);
-    if (!Number.isFinite(value) || value < 0) {
-      throw new TypeError(`${label} must be a finite non-negative number`);
-    }
+    if (!Number.isFinite(value) || value < 0) throw new TypeError(`${label} must be a finite non-negative number`);
     costs[field] = value;
     supplied = true;
   }
-
   return supplied ? Object.freeze(costs) : undefined;
+}
+
+export function applyCostPreset(documentLike, costs = {}) {
+  if (!documentLike?.getElementById) return;
+  for (const [field, id] of COST_INPUTS) {
+    const element = documentLike.getElementById(id);
+    if (!element) continue;
+    const value = costs?.[field];
+    element.value = value === null || value === undefined || value === '' ? '' : String(value);
+  }
 }
 
 export function buildPanelState(state, viewModel = {}) {
   if (state === 'result') {
     const currency = viewModel.currency || 'USD';
     return Object.freeze({
-      state,
-      title: 'Auction analysis',
-      message: viewModel.decisionReason || 'Auction analysis is ready.',
+      state, title: 'Auction analysis', message: viewModel.decisionReason || 'Auction analysis is ready.',
       productTitle: viewModel.productTitle || 'Unknown product',
       currentPrice: formatMoney(viewModel.currentPrice, currency),
       estimatedValue: formatMoney(viewModel.estimatedValue, currency),
@@ -98,7 +99,6 @@ export function buildPanelState(state, viewModel = {}) {
       soldEvidenceState: viewModel.soldEvidenceState || 'not_configured'
     });
   }
-
   const copy = PANEL_COPY[state] || PANEL_COPY.error;
   return Object.freeze({ state: PANEL_COPY[state] ? state : 'error', ...copy });
 }
@@ -107,7 +107,6 @@ function setText(documentLike, id, value) {
   const element = documentLike?.getElementById?.(id);
   if (element) element.textContent = String(value ?? '—');
 }
-
 function setHidden(documentLike, id, hidden) {
   const element = documentLike?.getElementById?.(id);
   if (element) element.hidden = Boolean(hidden);
@@ -121,9 +120,7 @@ export function renderPanel(documentLike, panel) {
   setHidden(documentLike, 'analysis-result', !resultVisible);
   setHidden(documentLike, 'analyze-again', !resultVisible);
   setHidden(documentLike, 'save-item', !resultVisible);
-
   if (!resultVisible) return;
-
   setText(documentLike, 'product-title', panel.productTitle);
   setText(documentLike, 'current-price', panel.currentPrice);
   setText(documentLike, 'estimated-value', panel.estimatedValue);
@@ -139,12 +136,30 @@ export function renderPanel(documentLike, panel) {
   setText(documentLike, 'sold-evidence-state', panel.soldEvidenceState);
 }
 
-export function createSidePanelApp({ documentLike, runtime, watchlistStore = null } = {}) {
+function renderPresetOptions(documentLike, presets, selectedKey = '') {
+  const select = documentLike?.getElementById?.('cost-preset-select');
+  if (!select || typeof documentLike?.createElement !== 'function') return;
+  select.replaceChildren?.();
+  const empty = documentLike.createElement('option');
+  empty.value = '';
+  empty.textContent = presets.length ? 'Choose saved preset' : 'No saved presets';
+  select.appendChild(empty);
+  for (const preset of presets) {
+    const option = documentLike.createElement('option');
+    option.value = preset.key;
+    option.textContent = preset.name;
+    select.appendChild(option);
+  }
+  select.value = presets.some(preset => preset.key === selectedKey) ? selectedKey : '';
+}
+
+export function createSidePanelApp({ documentLike, runtime, watchlistStore = null, costPresetStore = null } = {}) {
   if (!documentLike) throw new TypeError('documentLike is required');
   if (!runtime || typeof runtime.sendMessage !== 'function') throw new TypeError('runtime is required');
-  if (watchlistStore !== null && typeof watchlistStore?.save !== 'function') {
-    throw new TypeError('watchlistStore must provide save');
-  }
+  if (watchlistStore !== null && typeof watchlistStore?.save !== 'function') throw new TypeError('watchlistStore must provide save');
+  if (costPresetStore !== null && (
+    typeof costPresetStore?.save !== 'function' || typeof costPresetStore?.list !== 'function' || typeof costPresetStore?.remove !== 'function'
+  )) throw new TypeError('costPresetStore must provide save, list, and remove');
 
   let lastProduct = null;
   let lastAnalysis = null;
@@ -155,75 +170,91 @@ export function createSidePanelApp({ documentLike, runtime, watchlistStore = nul
     if (!watchlistStore) setHidden(documentLike, 'save-item', true);
   };
 
-  async function analyze(product) {
-    if (!product) {
-      lastProduct = null;
-      lastAnalysis = null;
-      show('unsupported');
-      return;
+  async function refreshCostPresets(selectedKey = '') {
+    if (!costPresetStore) return [];
+    const presets = await costPresetStore.list();
+    renderPresetOptions(documentLike, presets, selectedKey);
+    return presets;
+  }
+
+  async function saveCostPreset() {
+    if (!costPresetStore) return;
+    try {
+      const name = documentLike.getElementById?.('cost-preset-name')?.value ?? '';
+      const costs = readCostInputs(documentLike);
+      if (!costs) throw new TypeError('At least one cost is required');
+      const preset = await costPresetStore.save(name, costs);
+      await refreshCostPresets(preset.key);
+      setText(documentLike, 'cost-preset-status', 'Preset saved locally');
+    } catch {
+      setText(documentLike, 'cost-preset-status', 'Preset could not be saved');
     }
+  }
 
-    lastProduct = product;
-    lastAnalysis = null;
-    setText(documentLike, 'save-item', 'Save');
-    show('analyzing');
+  async function applySelectedCostPreset() {
+    if (!costPresetStore) return;
+    const key = String(documentLike.getElementById?.('cost-preset-select')?.value ?? '').trim();
+    if (!key) return;
+    const presets = await costPresetStore.list();
+    const preset = presets.find(candidate => candidate.key === key);
+    if (!preset) return;
+    applyCostPreset(documentLike, preset.costs);
+    const nameInput = documentLike.getElementById?.('cost-preset-name');
+    if (nameInput) nameInput.value = preset.name;
+    setText(documentLike, 'cost-preset-status', 'Preset applied');
+  }
 
+  async function deleteSelectedCostPreset() {
+    if (!costPresetStore) return;
+    const key = String(documentLike.getElementById?.('cost-preset-select')?.value ?? '').trim();
+    if (!key) return;
+    const removed = await costPresetStore.remove(key);
+    if (removed) {
+      await refreshCostPresets();
+      setText(documentLike, 'cost-preset-status', 'Preset deleted');
+    }
+  }
+
+  async function analyze(product) {
+    if (!product) { lastProduct = null; lastAnalysis = null; show('unsupported'); return; }
+    lastProduct = product; lastAnalysis = null; setText(documentLike, 'save-item', 'Save'); show('analyzing');
     try {
       const costs = readCostInputs(documentLike);
-      const request = createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, {
-        product,
-        ...(costs === undefined ? {} : { costs })
-      });
+      const request = createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, { product, ...(costs === undefined ? {} : { costs }) });
       const response = await runtime.sendMessage(request);
-      if (response?.type !== MESSAGE_TYPES.ANALYSIS_RESULT) {
-        show('error');
-        return;
-      }
+      if (response?.type !== MESSAGE_TYPES.ANALYSIS_RESULT) { show('error'); return; }
       lastAnalysis = response.payload.analysis;
-      const viewModel = buildAnalysisViewModel(lastAnalysis, product);
-      show('result', viewModel);
-    } catch {
-      lastAnalysis = null;
-      show('error');
-    }
+      show('result', buildAnalysisViewModel(lastAnalysis, product));
+    } catch { lastAnalysis = null; show('error'); }
   }
 
   async function saveCurrent() {
     if (!watchlistStore || !lastProduct || !lastAnalysis) return;
     const button = documentLike.getElementById?.('save-item');
     if (button) button.disabled = true;
-
-    try {
-      await watchlistStore.save(lastProduct, lastAnalysis);
-      setText(documentLike, 'save-item', 'Saved');
-    } catch {
-      setText(documentLike, 'save-item', 'Save failed');
-    } finally {
-      if (button) button.disabled = false;
-    }
+    try { await watchlistStore.save(lastProduct, lastAnalysis); setText(documentLike, 'save-item', 'Saved'); }
+    catch { setText(documentLike, 'save-item', 'Save failed'); }
+    finally { if (button) button.disabled = false; }
   }
 
   const onMessage = (message) => {
     if (message?.type !== MESSAGE_TYPES.PRODUCT_DETECTED) return undefined;
-    show('scanning');
-    void analyze(message?.payload?.product);
-    return undefined;
+    show('scanning'); void analyze(message?.payload?.product); return undefined;
   };
 
   runtime.onMessage?.addListener?.(onMessage);
   documentLike.getElementById?.('analyze-again')?.addEventListener?.('click', () => void analyze(lastProduct));
-  if (watchlistStore) {
-    documentLike.getElementById?.('save-item')?.addEventListener?.('click', saveCurrent);
+  if (watchlistStore) documentLike.getElementById?.('save-item')?.addEventListener?.('click', saveCurrent);
+  if (costPresetStore) {
+    documentLike.getElementById?.('save-cost-preset')?.addEventListener?.('click', () => void saveCostPreset());
+    documentLike.getElementById?.('apply-cost-preset')?.addEventListener?.('click', () => void applySelectedCostPreset());
+    documentLike.getElementById?.('delete-cost-preset')?.addEventListener?.('click', () => void deleteSelectedCostPreset());
+    void refreshCostPresets();
   }
   show('idle');
 
-  return Object.freeze({
-    analyze,
-    saveCurrent,
-    render: show,
-    destroy() {
-      runtime.onMessage?.removeListener?.(onMessage);
-    }
+  return Object.freeze({ analyze, saveCurrent, saveCostPreset, applySelectedCostPreset, deleteSelectedCostPreset, refreshCostPresets, render: show,
+    destroy() { runtime.onMessage?.removeListener?.(onMessage); }
   });
 }
 
@@ -231,10 +262,7 @@ if (typeof document !== 'undefined' && globalThis.chrome?.runtime) {
   document.addEventListener('DOMContentLoaded', () => {
     const storageArea = globalThis.chrome?.storage?.local;
     const watchlistStore = storageArea ? createWatchlistStore(storageArea) : null;
-    createSidePanelApp({
-      documentLike: document,
-      runtime: globalThis.chrome.runtime,
-      watchlistStore
-    });
+    const costPresetStore = storageArea ? createCostPresetStore(storageArea) : null;
+    createSidePanelApp({ documentLike: document, runtime: globalThis.chrome.runtime, watchlistStore, costPresetStore });
   }, { once: true });
 }

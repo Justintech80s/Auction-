@@ -26,40 +26,42 @@
         <p class="helper-text">Auction does not guess marketplace fees. Leave fields blank to keep gross-only analysis.</p>
       </div>
 
+      <div class="preset-card" aria-labelledby="preset-heading">
+        <div>
+          <p class="label">Saved Presets</p>
+          <h2 id="preset-heading">Reuse your own cost setup</h2>
+          <p class="helper-text">Presets are saved locally in this browser. Auction never infers or auto-fills marketplace fees.</p>
+        </div>
+        <label class="preset-field" for="cost-preset-name">
+          <span>Preset name</span>
+          <input id="cost-preset-name" type="text" maxlength="48" autocomplete="off" placeholder="eBay resale">
+        </label>
+        <label class="preset-field" for="cost-preset-select">
+          <span>Saved preset</span>
+          <select id="cost-preset-select">
+            <option value="">No saved presets</option>
+          </select>
+        </label>
+        <div class="preset-actions">
+          <button id="save-cost-preset" type="button" class="secondary-action">Save preset</button>
+          <button id="apply-cost-preset" type="button" class="secondary-action">Apply</button>
+          <button id="delete-cost-preset" type="button" class="secondary-action danger-action">Delete</button>
+        </div>
+        <p id="cost-preset-status" class="preset-status" aria-live="polite"></p>
+      </div>
+
       <div class="cost-grid">
-        <label class="cost-field" for="cost-marketplace-fee">
-          <span>Marketplace fee</span>
-          <input id="cost-marketplace-fee" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-        <label class="cost-field" for="cost-shipping">
-          <span>Shipping</span>
-          <input id="cost-shipping" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-        <label class="cost-field" for="cost-tax">
-          <span>Tax</span>
-          <input id="cost-tax" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-        <label class="cost-field" for="cost-repairs">
-          <span>Repairs</span>
-          <input id="cost-repairs" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-        <label class="cost-field" for="cost-payment-processing">
-          <span>Payment processing</span>
-          <input id="cost-payment-processing" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
-        <label class="cost-field" for="cost-holding">
-          <span>Holding cost</span>
-          <input id="cost-holding" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
-        </label>
+        <label class="cost-field" for="cost-marketplace-fee"><span>Marketplace fee</span><input id="cost-marketplace-fee" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+        <label class="cost-field" for="cost-shipping"><span>Shipping</span><input id="cost-shipping" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+        <label class="cost-field" for="cost-tax"><span>Tax</span><input id="cost-tax" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+        <label class="cost-field" for="cost-repairs"><span>Repairs</span><input id="cost-repairs" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+        <label class="cost-field" for="cost-payment-processing"><span>Payment processing</span><input id="cost-payment-processing" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+        <label class="cost-field" for="cost-holding"><span>Holding cost</span><input id="cost-holding" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
       </div>
     </section>
 
     <section id="analysis-result" class="analysis-card" hidden>
-      <div class="product-block">
-        <p class="label">Product</p>
-        <h2 id="product-title">—</h2>
-      </div>
-
+      <div class="product-block"><p class="label">Product</p><h2 id="product-title">—</h2></div>
       <dl class="metrics-grid">
         <div class="metric"><dt>Current Price</dt><dd id="current-price">—</dd></div>
         <div class="metric"><dt>Estimated Value</dt><dd id="estimated-value">—</dd></div>
@@ -71,12 +73,7 @@
         <div class="metric"><dt>Confidence</dt><dd id="confidence">—</dd></div>
         <div class="metric"><dt>Verified Sold</dt><dd id="verified-sold-count">0</dd></div>
       </dl>
-
-      <section class="decision-card" aria-labelledby="decision-heading">
-        <p id="decision-heading" class="label">Auction Decision</p>
-        <strong id="decision" class="decision">manual_review</strong>
-      </section>
-
+      <section class="decision-card" aria-labelledby="decision-heading"><p id="decision-heading" class="label">Auction Decision</p><strong id="decision" class="decision">manual_review</strong></section>
       <div class="evidence-row">
         <div><span class="label">Guardian</span><strong id="risk-state">unknown</strong></div>
         <div><span class="label">Sold Evidence</span><strong id="sold-evidence-state">not_configured</strong></div>
@@ -86,9 +83,7 @@
     <button id="save-item" type="button" class="primary-action" hidden>Save</button>
     <button id="analyze-again" type="button" class="primary-action" hidden>Analyze Again</button>
 
-    <footer>
-      <p>Recommendations come from Auction's valuation, sold-evidence, Opportunity, and Guardian pipeline.</p>
-    </footer>
+    <footer><p>Recommendations come from Auction's valuation, sold-evidence, Opportunity, and Guardian pipeline.</p></footer>
   </main>
   <script type="module" src="./app.js"></script>
 </body>
