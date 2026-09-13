@@ -30,3 +30,35 @@ test('Guardian decision is carried into opportunity analysis', async () => {
     assert.equal(result.opportunity.decision, 'manual_review');
   }
 });
+
+test('pipeline forwards explicit costs without Guardian', async () => {
+  const result = await valueItem(
+    { brand: 'Sony', model: 'WM-2', category: 'Walkman' },
+    {
+      search: async () => evidence,
+      acquisitionPrice: 50,
+      costs: { shipping: 10, repairs: 5 }
+    }
+  );
+
+  assert.equal(result.opportunity.costsApplied, true);
+  assert.equal(result.opportunity.totalCosts, 15);
+  assert.equal(typeof result.opportunity.netProfit, 'number');
+  assert.equal(typeof result.opportunity.netMarginPct, 'number');
+});
+
+test('pipeline forwards explicit costs with Guardian enabled', async () => {
+  const result = await valueItem(
+    { brand: 'Sony', model: 'WM-2', category: 'Walkman' },
+    {
+      search: async () => evidence,
+      acquisitionPrice: 50,
+      guardian: true,
+      costs: { marketplaceFee: 8, paymentProcessing: 2 }
+    }
+  );
+
+  assert.equal(result.opportunity.costsApplied, true);
+  assert.equal(result.opportunity.totalCosts, 10);
+  assert.equal(result.opportunity.securityDecision, result.security.decision);
+});
