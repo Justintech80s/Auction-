@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Analyze supported shopping pages with Auction valuation, sold evidence, and Guardian risk checks.",
   "permissions": [
-    "sidePanel"
+    "sidePanel",
+    "storage"
   ],
   "host_permissions": [
     "https://www.ebay.com/*",
