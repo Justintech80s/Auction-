@@ -1,3 +1,5 @@
+import { calculateNetEconomics } from './costs/engine.js';
+
 function finite(value, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -30,6 +32,7 @@ export function evaluateOpportunity({
   valuation = {},
   security = { decision: 'allow' },
   soldEvidence,
+  costs,
   targetMarginPct = 25
 } = {}) {
   const price = Number(acquisitionPrice);
@@ -50,6 +53,12 @@ export function evaluateOpportunity({
 
   const expectedProfit = estimate - price;
   const expectedMarginPct = estimate ? (expectedProfit / estimate) * 100 : 0;
+  const costsApplied = costs !== undefined && costs !== null;
+  const netEconomics = costsApplied
+    ? calculateNetEconomics({ acquisitionPrice: price, estimatedValue: estimate, costs })
+    : null;
+  const profitabilityMarginPct = netEconomics?.netMarginPct ?? expectedMarginPct;
+
   const discountPct = ((estimate - price) / estimate) * 100;
   const confidenceAdjustedValue = low * confidence;
   const maxRecommendedBid = confidenceAdjustedValue * (1 - targetMargin);
@@ -65,18 +74,18 @@ export function evaluateOpportunity({
     || soldGate.riskDecision === 'reject'
   ) {
     decision = 'manual_review';
-  } else if (price > high || expectedMarginPct < -10) {
+  } else if (price > high || profitabilityMarginPct < -10) {
     decision = 'avoid';
   } else if (price > estimate) {
     decision = 'overpriced';
   } else if (
     opportunityScore >= 80
-    && expectedMarginPct >= 35
+    && profitabilityMarginPct >= 35
     && confidence >= 0.75
     && soldGate.passed
   ) {
     decision = 'strong_buy';
-  } else if (opportunityScore >= 65 && expectedMarginPct >= 20 && confidence >= 0.55) {
+  } else if (opportunityScore >= 65 && profitabilityMarginPct >= 20 && confidence >= 0.55) {
     decision = 'buy';
   } else {
     decision = 'fair';
@@ -90,6 +99,13 @@ export function evaluateOpportunity({
     confidence: round(confidence, 4),
     expectedProfit: round(expectedProfit),
     expectedMarginPct: round(expectedMarginPct),
+    ...(netEconomics ? {
+      costBreakdown: netEconomics.costBreakdown,
+      totalCosts: netEconomics.totalCosts,
+      netProfit: netEconomics.netProfit,
+      netMarginPct: netEconomics.netMarginPct
+    } : {}),
+    costsApplied,
     discountPct: round(discountPct),
     maxRecommendedBid: round(maxRecommendedBid),
     opportunityScore,

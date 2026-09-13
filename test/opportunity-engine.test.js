@@ -3,12 +3,7 @@ import assert from 'node:assert/strict';
 import { evaluateOpportunity } from '../src/opportunity.js';
 
 test('labels a deeply discounted high-confidence item as strong_buy', () => {
-  const result = evaluateOpportunity({
-    acquisitionPrice: 60,
-    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
-    security: { decision: 'allow' }
-  });
-
+  const result = evaluateOpportunity({ acquisitionPrice: 60, valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 }, security: { decision: 'allow' } });
   assert.equal(result.decision, 'strong_buy');
   assert.equal(result.expectedProfit, 60);
   assert.equal(result.expectedMarginPct, 50);
@@ -16,36 +11,20 @@ test('labels a deeply discounted high-confidence item as strong_buy', () => {
 });
 
 test('returns avoid when acquisition price is materially above valuation', () => {
-  const result = evaluateOpportunity({
-    acquisitionPrice: 150,
-    valuation: { estimate: 100, low: 90, high: 110, confidence: 0.9 },
-    security: { decision: 'allow' }
-  });
-
+  const result = evaluateOpportunity({ acquisitionPrice: 150, valuation: { estimate: 100, low: 90, high: 110, confidence: 0.9 }, security: { decision: 'allow' } });
   assert.equal(result.decision, 'avoid');
   assert.ok(result.expectedProfit < 0);
 });
 
 test('forces manual_review when Guardian requires review or rejection', () => {
   for (const decision of ['review', 'reject']) {
-    const result = evaluateOpportunity({
-      acquisitionPrice: 40,
-      valuation: { estimate: 120, low: 100, high: 140, confidence: 0.95 },
-      security: { decision }
-    });
+    const result = evaluateOpportunity({ acquisitionPrice: 40, valuation: { estimate: 120, low: 100, high: 140, confidence: 0.95 }, security: { decision } });
     assert.equal(result.decision, 'manual_review');
   }
 });
 
 test('computes a confidence-adjusted maximum recommended bid', () => {
-  const result = evaluateOpportunity({
-    acquisitionPrice: 70,
-    valuation: { estimate: 100, low: 80, high: 120, confidence: 0.75 },
-    security: { decision: 'allow' },
-    targetMarginPct: 25
-  });
-
-  // Conservative bid ceiling: downside valuation × confidence × retained value after target margin.
+  const result = evaluateOpportunity({ acquisitionPrice: 70, valuation: { estimate: 100, low: 80, high: 120, confidence: 0.75 }, security: { decision: 'allow' }, targetMarginPct: 25 });
   assert.equal(result.maxRecommendedBid, 45);
   assert.equal(result.expectedProfit, 30);
 });
@@ -56,54 +35,63 @@ test('rejects missing or invalid acquisition prices', () => {
 });
 
 test('sold evidence gate prevents strong_buy without verified sold authority', () => {
-  const result = evaluateOpportunity({
-    acquisitionPrice: 60,
-    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
-    security: { decision: 'allow' },
-    soldEvidence: {
-      status: 'ok',
-      verifiedCount: 0,
-      quality: 0,
-      risk: { decision: 'allow' }
-    }
-  });
-
+  const result = evaluateOpportunity({ acquisitionPrice: 60, valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 }, security: { decision: 'allow' }, soldEvidence: { status: 'ok', verifiedCount: 0, quality: 0, risk: { decision: 'allow' } } });
   assert.notEqual(result.decision, 'strong_buy');
   assert.equal(result.soldEvidenceGateRequested, true);
   assert.equal(result.soldEvidenceGatePassed, false);
 });
 
 test('verified sold authority allows strong_buy when all other thresholds pass', () => {
-  const result = evaluateOpportunity({
-    acquisitionPrice: 60,
-    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
-    security: { decision: 'allow' },
-    soldEvidence: {
-      status: 'ok',
-      verifiedCount: 2,
-      quality: 0.8,
-      risk: { decision: 'allow' }
-    }
-  });
-
+  const result = evaluateOpportunity({ acquisitionPrice: 60, valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 }, security: { decision: 'allow' }, soldEvidence: { status: 'ok', verifiedCount: 2, quality: 0.8, risk: { decision: 'allow' } } });
   assert.equal(result.decision, 'strong_buy');
   assert.equal(result.soldEvidenceGatePassed, true);
 });
 
 test('sold evidence Guardian review or reject forces manual_review', () => {
   for (const decision of ['review', 'reject']) {
-    const result = evaluateOpportunity({
-      acquisitionPrice: 40,
-      valuation: { estimate: 120, low: 100, high: 140, confidence: 0.95 },
-      security: { decision: 'allow' },
-      soldEvidence: {
-        status: 'ok',
-        verifiedCount: 2,
-        quality: 0.9,
-        risk: { decision }
-      }
-    });
-
+    const result = evaluateOpportunity({ acquisitionPrice: 40, valuation: { estimate: 120, low: 100, high: 140, confidence: 0.95 }, security: { decision: 'allow' }, soldEvidence: { status: 'ok', verifiedCount: 2, quality: 0.9, risk: { decision } } });
     assert.equal(result.decision, 'manual_review');
   }
+});
+
+test('preserves gross fields and reports net economics when explicit costs are supplied', () => {
+  const result = evaluateOpportunity({
+    acquisitionPrice: 60,
+    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
+    security: { decision: 'allow' },
+    costs: { marketplaceFee: 12, shipping: 6, paymentProcessing: 2 }
+  });
+
+  assert.equal(result.expectedProfit, 60);
+  assert.equal(result.expectedMarginPct, 50);
+  assert.equal(result.costsApplied, true);
+  assert.equal(result.totalCosts, 20);
+  assert.equal(result.netProfit, 40);
+  assert.equal(result.netMarginPct, 33.33);
+});
+
+test('uses net margin to downgrade a grossly attractive deal when explicit costs are supplied', () => {
+  const result = evaluateOpportunity({
+    acquisitionPrice: 60,
+    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
+    security: { decision: 'allow' },
+    costs: { marketplaceFee: 20, shipping: 18, repairs: 10 }
+  });
+
+  assert.equal(result.expectedMarginPct, 50);
+  assert.equal(result.netMarginPct, 10);
+  assert.equal(result.decision, 'fair');
+});
+
+test('allows strong_buy with costs only when net economics and existing gates pass', () => {
+  const result = evaluateOpportunity({
+    acquisitionPrice: 40,
+    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
+    security: { decision: 'allow' },
+    soldEvidence: { status: 'ok', verifiedCount: 2, quality: 0.9, risk: { decision: 'allow' } },
+    costs: { marketplaceFee: 10, shipping: 5 }
+  });
+
+  assert.equal(result.netMarginPct, 54.17);
+  assert.equal(result.decision, 'strong_buy');
 });

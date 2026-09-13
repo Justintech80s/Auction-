@@ -153,6 +153,7 @@ export async function valueItem(item = {}, options = {}) {
         acquisitionPrice: options.acquisitionPrice,
         valuation,
         soldEvidence: opportunitySoldEvidence,
+        costs: options.costs,
         targetMarginPct: options.targetMarginPct
       })
     };
@@ -179,6 +180,7 @@ export async function valueItem(item = {}, options = {}) {
       valuation,
       security,
       soldEvidence: opportunitySoldEvidence,
+      costs: options.costs,
       targetMarginPct: options.targetMarginPct
     });
   }
