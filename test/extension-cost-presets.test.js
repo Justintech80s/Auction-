@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import {
   COST_PRESET_STORAGE_KEY,
+  DEFAULT_COST_PRESET_STORAGE_KEY,
   MAX_COST_PRESETS,
   createCostPresetStore
 } from '../extension/storage/cost-presets.js';
@@ -17,6 +18,9 @@ function fakeStorage(initial = {}) {
     },
     async set(values) {
       Object.assign(state, structuredClone(values));
+    },
+    async remove(key) {
+      delete state[key];
     },
     snapshot() {
       return structuredClone(state);
@@ -131,6 +135,51 @@ test('malformed persisted cost presets are cleaned instead of trusted', async ()
   assert.equal(storage.snapshot()[COST_PRESET_STORAGE_KEY].length, 1);
 });
 
+test('cost preset store sets, changes, and clears a default by existing preset key', async () => {
+  const storage = fakeStorage();
+  const store = createCostPresetStore(storage);
+  const ebay = await store.save('eBay', { shipping: 10 });
+  const pickup = await store.save('Local pickup', { repairs: 4 });
+
+  assert.deepEqual(await store.setDefault(ebay.key), ebay);
+  assert.equal(storage.snapshot()[DEFAULT_COST_PRESET_STORAGE_KEY], ebay.key);
+  assert.deepEqual(await store.getDefault(), ebay);
+
+  assert.deepEqual(await store.setDefault(pickup.key), pickup);
+  assert.equal(storage.snapshot()[DEFAULT_COST_PRESET_STORAGE_KEY], pickup.key);
+  assert.deepEqual(await store.getDefault(), pickup);
+
+  assert.equal(await store.clearDefault(), true);
+  assert.equal(storage.snapshot()[DEFAULT_COST_PRESET_STORAGE_KEY], undefined);
+  assert.equal(await store.getDefault(), null);
+  assert.equal(await store.clearDefault(), false);
+});
+
+test('cost preset store rejects missing default targets and cleans malformed or stale defaults', async () => {
+  const storage = fakeStorage({ [DEFAULT_COST_PRESET_STORAGE_KEY]: { bad: true } });
+  const store = createCostPresetStore(storage);
+  await store.save('Good', { shipping: 5 });
+
+  assert.equal(await store.getDefault(), null);
+  assert.equal(storage.snapshot()[DEFAULT_COST_PRESET_STORAGE_KEY], undefined);
+  await assert.rejects(() => store.setDefault('missing'), /saved preset/i);
+
+  await storage.set({ [DEFAULT_COST_PRESET_STORAGE_KEY]: 'missing' });
+  assert.equal(await store.getDefault(), null);
+  assert.equal(storage.snapshot()[DEFAULT_COST_PRESET_STORAGE_KEY], undefined);
+});
+
+test('deleting the default preset safely clears the default selection', async () => {
+  const storage = fakeStorage();
+  const store = createCostPresetStore(storage);
+  const preset = await store.save('Default resale', { marketplaceFee: 12 });
+  await store.setDefault(preset.key);
+
+  assert.equal(await store.remove(preset.key), true);
+  assert.equal(await store.getDefault(), null);
+  assert.equal(storage.snapshot()[DEFAULT_COST_PRESET_STORAGE_KEY], undefined);
+});
+
 test('applying a cost preset populates only the six existing explicit cost fields', () => {
   const documentLike = fakeDocument({
     'cost-marketplace-fee': '99',
@@ -157,16 +206,18 @@ test('applying a cost preset populates only the six existing explicit cost field
   assert.equal(documentLike.getElementById('unrelated').value, 'leave-me');
 });
 
-test('side panel markup exposes preset name, select, save, apply, and delete controls', async () => {
+test('side panel markup exposes preset name, select, save, apply, delete, and set-default controls', async () => {
   const html = await readFile(new URL('../extension/sidepanel/index.html', import.meta.url), 'utf8');
   for (const id of [
     'cost-preset-name',
     'cost-preset-select',
     'save-cost-preset',
     'apply-cost-preset',
-    'delete-cost-preset'
+    'delete-cost-preset',
+    'set-default-cost-preset'
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`));
   }
   assert.match(html, /saved locally/i);
+  assert.match(html, /default/i);
 });
