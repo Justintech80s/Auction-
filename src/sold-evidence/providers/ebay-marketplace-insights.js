@@ -7,6 +7,10 @@ const MAX_QUERY_LENGTH = 512;
 const MAX_RESULTS = 200;
 const MAX_TIMEOUT_MS = 30_000;
 
+function runtimeEnv() {
+  return globalThis.process?.env || {};
+}
+
 function boundedPositiveInteger(value, fallback, max) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
@@ -95,7 +99,7 @@ export function createEbayMarketplaceInsightsProvider(config = {}) {
     name: 'ebay_marketplace_insights',
 
     async searchSoldEvidence(query, options = {}) {
-      const accessToken = config.accessToken || process.env.EBAY_MARKETPLACE_INSIGHTS_ACCESS_TOKEN;
+      const accessToken = config.accessToken || runtimeEnv().EBAY_MARKETPLACE_INSIGHTS_ACCESS_TOKEN;
       if (!accessToken) {
         throw new Error('EBAY_MARKETPLACE_INSIGHTS_ACCESS_TOKEN is required');
       }
