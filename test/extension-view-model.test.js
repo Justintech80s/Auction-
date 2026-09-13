@@ -23,14 +23,8 @@ function analysis(overrides = {}) {
       reason: 'Priced below estimated value.',
       expectedProfit: 80
     },
-    soldEvidence: {
-      status: 'ok',
-      verifiedCount: 3
-    },
-    security: {
-      decision: 'allow',
-      riskBand: 'low'
-    },
+    soldEvidence: { status: 'ok', verifiedCount: 3 },
+    security: { decision: 'allow', riskBand: 'low' },
     ...overrides
   };
 }
@@ -45,12 +39,37 @@ test('maps Auction analysis into stable display fields', () => {
     valueRange: { low: 180, high: 220 },
     verifiedSoldCount: 3,
     potentialProfit: 80,
+    totalCosts: null,
+    netProfit: null,
+    netMarginPct: null,
+    costsApplied: false,
     confidence: 0.82,
     decision: 'buy',
     decisionReason: 'Priced below estimated value.',
     riskState: 'allow',
     soldEvidenceState: 'ok'
   });
+});
+
+test('maps returned net economics without recalculating them in the browser', () => {
+  const vm = buildAnalysisViewModel(analysis({
+    opportunity: {
+      decision: 'fair',
+      reason: 'Explicit costs reduce the net margin.',
+      expectedProfit: 80,
+      costsApplied: true,
+      totalCosts: 45.5,
+      netProfit: 34.5,
+      netMarginPct: 17.25
+    }
+  }), product);
+
+  assert.equal(vm.potentialProfit, 80);
+  assert.equal(vm.totalCosts, 45.5);
+  assert.equal(vm.netProfit, 34.5);
+  assert.equal(vm.netMarginPct, 17.25);
+  assert.equal(vm.costsApplied, true);
+  assert.equal(vm.decision, 'fair');
 });
 
 for (const decision of ['strong_buy', 'buy', 'fair', 'overpriced', 'avoid', 'manual_review']) {
@@ -84,6 +103,7 @@ test('handles missing valuation estimate conservatively', () => {
   assert.equal(vm.estimatedValue, null);
   assert.equal(vm.valueRange, null);
   assert.equal(vm.potentialProfit, null);
+  assert.equal(vm.netProfit, null);
   assert.equal(vm.decision, null);
 });
 
