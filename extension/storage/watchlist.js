@@ -12,6 +12,15 @@ const DECISIONS = new Set([
   'manual_review'
 ]);
 
+const COST_FIELDS = Object.freeze([
+  'marketplaceFee',
+  'shipping',
+  'tax',
+  'repairs',
+  'paymentProcessing',
+  'holding'
+]);
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -43,6 +52,18 @@ function normalizeRange(range) {
   return Object.freeze({ low, high });
 }
 
+function normalizeCostBreakdown(costBreakdown) {
+  if (!costBreakdown || typeof costBreakdown !== 'object' || Array.isArray(costBreakdown)) return null;
+  const normalized = {};
+  for (const field of COST_FIELDS) {
+    if (!(field in costBreakdown)) continue;
+    const value = finiteNumber(costBreakdown[field]);
+    if (value === null || value < 0) continue;
+    normalized[field] = value;
+  }
+  return Object.keys(normalized).length ? Object.freeze(normalized) : null;
+}
+
 function normalizeSavedAt(value) {
   const date = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(date.getTime())) throw new TypeError('savedAt must be a valid date');
@@ -56,6 +77,7 @@ function summarizeAnalysis(analysis = {}) {
   const security = analysis?.security || {};
   const decision = boundedOptionalString(opportunity.decision, 64);
   const confidence = finiteNumber(valuation.confidence);
+  const costsApplied = opportunity.costsApplied === true;
 
   return Object.freeze({
     status: boundedOptionalString(analysis?.status ?? valuation?.status, 64),
@@ -67,6 +89,11 @@ function summarizeAnalysis(analysis = {}) {
       nonNegativeInteger(valuation.verifiedSoldCount, 0)
     ),
     potentialProfit: finiteNumber(opportunity.expectedProfit),
+    costsApplied,
+    totalCosts: costsApplied ? finiteNumber(opportunity.totalCosts) : null,
+    netProfit: costsApplied ? finiteNumber(opportunity.netProfit) : null,
+    netMarginPct: costsApplied ? finiteNumber(opportunity.netMarginPct) : null,
+    costBreakdown: costsApplied ? normalizeCostBreakdown(opportunity.costBreakdown) : null,
     decision: decision && DECISIONS.has(decision) ? decision : null,
     decisionReason: boundedOptionalString(opportunity.reason, 512),
     riskState: boundedOptionalString(security.decision, 64) || 'unknown',
@@ -81,6 +108,7 @@ function sanitizeStoredAnalysis(summary = {}) {
 
   const decision = boundedOptionalString(summary.decision, 64);
   const confidence = finiteNumber(summary.confidence);
+  const costsApplied = summary.costsApplied === true;
 
   return Object.freeze({
     status: boundedOptionalString(summary.status, 64),
@@ -89,6 +117,11 @@ function sanitizeStoredAnalysis(summary = {}) {
     confidence: confidence === null ? null : Math.max(0, Math.min(1, confidence)),
     verifiedSoldCount: nonNegativeInteger(summary.verifiedSoldCount, 0),
     potentialProfit: finiteNumber(summary.potentialProfit),
+    costsApplied,
+    totalCosts: costsApplied ? finiteNumber(summary.totalCosts) : null,
+    netProfit: costsApplied ? finiteNumber(summary.netProfit) : null,
+    netMarginPct: costsApplied ? finiteNumber(summary.netMarginPct) : null,
+    costBreakdown: costsApplied ? normalizeCostBreakdown(summary.costBreakdown) : null,
     decision: decision && DECISIONS.has(decision) ? decision : null,
     decisionReason: boundedOptionalString(summary.decisionReason, 512),
     riskState: boundedOptionalString(summary.riskState, 64) || 'unknown',
