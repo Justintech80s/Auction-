@@ -9,6 +9,14 @@ export const MESSAGE_TYPES = Object.freeze({
 
 const SUPPORTED_TYPES = new Set(Object.values(MESSAGE_TYPES));
 const MAX_MESSAGE_BYTES = 64 * 1024;
+const COST_FIELDS = Object.freeze([
+  'marketplaceFee',
+  'shipping',
+  'tax',
+  'repairs',
+  'paymentProcessing',
+  'holding'
+]);
 const utf8Encoder = new TextEncoder();
 
 function isPlainObject(value) {
@@ -37,9 +45,32 @@ function normalizeProduct(product) {
   });
 }
 
-function normalizeProductPayload(payload) {
+function normalizeCosts(costs) {
+  if (costs === undefined || costs === null) return undefined;
+  if (!isPlainObject(costs)) throw new TypeError('costs must be an object');
+
+  const normalized = {};
+  for (const field of COST_FIELDS) {
+    if (costs[field] === undefined || costs[field] === null) continue;
+    const value = Number(costs[field]);
+    if (!Number.isFinite(value) || value < 0) {
+      throw new TypeError(`${field} must be a finite non-negative number`);
+    }
+    normalized[field] = value;
+  }
+  return Object.freeze(normalized);
+}
+
+function normalizeProductPayload(payload, { allowCosts = false } = {}) {
   if (!isPlainObject(payload)) throw new TypeError('message payload must be an object');
-  return Object.freeze({ product: normalizeProduct(payload.product) });
+  const product = normalizeProduct(payload.product);
+  if (!allowCosts) return Object.freeze({ product });
+
+  const costs = normalizeCosts(payload.costs);
+  return Object.freeze({
+    product,
+    ...(costs === undefined ? {} : { costs })
+  });
 }
 
 function normalizeAnalysisPayload(payload) {
@@ -66,8 +97,9 @@ function normalizeErrorPayload(payload) {
 function normalizePayload(type, payload) {
   switch (type) {
     case MESSAGE_TYPES.PRODUCT_DETECTED:
-    case MESSAGE_TYPES.ANALYSIS_REQUEST:
       return normalizeProductPayload(payload);
+    case MESSAGE_TYPES.ANALYSIS_REQUEST:
+      return normalizeProductPayload(payload, { allowCosts: true });
     case MESSAGE_TYPES.ANALYSIS_RESULT:
       return normalizeAnalysisPayload(payload);
     case MESSAGE_TYPES.ANALYSIS_ERROR:
