@@ -5,10 +5,19 @@ import { createWatchlistStore } from '../storage/watchlist.js';
 const PANEL_COPY = Object.freeze({
   idle: Object.freeze({ title: 'Ready to analyze', message: 'Open a supported product page to begin.' }),
   scanning: Object.freeze({ title: 'Scanning product page', message: 'Auction is reading the product details on this page.' }),
-  analyzing: Object.freeze({ title: 'Analyzing deal', message: 'Auction is checking valuation, evidence, and Guardian risk.' }),
+  analyzing: Object.freeze({ title: 'Analyzing deal', message: 'Auction is checking valuation, evidence, costs, and Guardian risk.' }),
   unsupported: Object.freeze({ title: 'Product not supported', message: 'Auction could not identify a supported product on this page.' }),
   error: Object.freeze({ title: 'Analysis unavailable', message: 'Auction could not complete this analysis safely.' })
 });
+
+const COST_INPUTS = Object.freeze([
+  ['marketplaceFee', 'cost-marketplace-fee', 'marketplace fee'],
+  ['shipping', 'cost-shipping', 'shipping'],
+  ['tax', 'cost-tax', 'tax'],
+  ['repairs', 'cost-repairs', 'repairs'],
+  ['paymentProcessing', 'cost-payment-processing', 'payment processing'],
+  ['holding', 'cost-holding', 'holding']
+]);
 
 export function formatMoney(value, currency = 'USD') {
   if (value === null || value === undefined || value === '') return '—';
@@ -33,11 +42,37 @@ export function formatPercent(value) {
   return `${Math.round(Math.max(0, Math.min(1, normalized)) * 100)}%`;
 }
 
+function formatMarginPercent(value) {
+  if (value === null || value === undefined || value === '') return '—';
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized)) return '—';
+  return `${normalized.toFixed(2)}%`;
+}
+
 function formatRange(range, currency) {
   if (!range) return '—';
   const low = formatMoney(range.low, currency);
   const high = formatMoney(range.high, currency);
   return low === '—' || high === '—' ? '—' : `${low} – ${high}`;
+}
+
+export function readCostInputs(documentLike) {
+  if (!documentLike?.getElementById) return undefined;
+  const costs = {};
+  let supplied = false;
+
+  for (const [field, id, label] of COST_INPUTS) {
+    const raw = String(documentLike.getElementById(id)?.value ?? '').trim();
+    if (!raw) continue;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0) {
+      throw new TypeError(`${label} must be a finite non-negative number`);
+    }
+    costs[field] = value;
+    supplied = true;
+  }
+
+  return supplied ? Object.freeze(costs) : undefined;
 }
 
 export function buildPanelState(state, viewModel = {}) {
@@ -53,6 +88,10 @@ export function buildPanelState(state, viewModel = {}) {
       valueRange: formatRange(viewModel.valueRange, currency),
       verifiedSoldCount: String(Number.isFinite(Number(viewModel.verifiedSoldCount)) ? Number(viewModel.verifiedSoldCount) : 0),
       potentialProfit: formatMoney(viewModel.potentialProfit, currency),
+      totalCosts: formatMoney(viewModel.totalCosts, currency),
+      netProfit: formatMoney(viewModel.netProfit, currency),
+      netMarginPct: formatMarginPercent(viewModel.netMarginPct),
+      costsApplied: viewModel.costsApplied === true,
       confidence: formatPercent(viewModel.confidence),
       decision: viewModel.decision || 'manual_review',
       riskState: viewModel.riskState || 'unknown',
@@ -91,6 +130,9 @@ export function renderPanel(documentLike, panel) {
   setText(documentLike, 'value-range', panel.valueRange);
   setText(documentLike, 'verified-sold-count', panel.verifiedSoldCount);
   setText(documentLike, 'potential-profit', panel.potentialProfit);
+  setText(documentLike, 'total-costs', panel.totalCosts);
+  setText(documentLike, 'net-profit', panel.netProfit);
+  setText(documentLike, 'net-margin', panel.netMarginPct);
   setText(documentLike, 'confidence', panel.confidence);
   setText(documentLike, 'decision', panel.decision);
   setText(documentLike, 'risk-state', panel.riskState);
@@ -127,7 +169,11 @@ export function createSidePanelApp({ documentLike, runtime, watchlistStore = nul
     show('analyzing');
 
     try {
-      const request = createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, { product });
+      const costs = readCostInputs(documentLike);
+      const request = createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, {
+        product,
+        ...(costs === undefined ? {} : { costs })
+      });
       const response = await runtime.sendMessage(request);
       if (response?.type !== MESSAGE_TYPES.ANALYSIS_RESULT) {
         show('error');
