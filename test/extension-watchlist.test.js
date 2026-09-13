@@ -119,6 +119,87 @@ test('watchlist saves only bounded product metadata and selected analysis fields
   assert.ok(!serialized.includes('provenance'));
 });
 
+test('watchlist preserves authoritative net economics without recomputing or storing unknown cost fields', async () => {
+  const storage = fakeStorage();
+  const store = createWatchlistStore(storage);
+
+  await store.save(product(1), analysis({
+    opportunity: {
+      decision: 'buy',
+      reason: 'Net economics pass.',
+      expectedProfit: 119,
+      costsApplied: true,
+      totalCosts: 29.5,
+      netProfit: 89.5,
+      netMarginPct: 40.68,
+      costBreakdown: {
+        marketplaceFee: 12.5,
+        shipping: 8,
+        tax: 0,
+        repairs: 4,
+        paymentProcessing: 3,
+        holding: 2,
+        inventedFee: 999
+      }
+    }
+  }));
+
+  const [record] = await store.list();
+  assert.equal(record.analysis.costsApplied, true);
+  assert.equal(record.analysis.totalCosts, 29.5);
+  assert.equal(record.analysis.netProfit, 89.5);
+  assert.equal(record.analysis.netMarginPct, 40.68);
+  assert.deepEqual(record.analysis.costBreakdown, {
+    marketplaceFee: 12.5,
+    shipping: 8,
+    tax: 0,
+    repairs: 4,
+    paymentProcessing: 3,
+    holding: 2
+  });
+  assert.equal('inventedFee' in record.analysis.costBreakdown, false);
+});
+
+test('watchlist keeps gross-only saves compatible when no costs were applied', async () => {
+  const store = createWatchlistStore(fakeStorage());
+  await store.save(product(1), analysis());
+
+  const [record] = await store.list();
+  assert.equal(record.analysis.costsApplied, false);
+  assert.equal(record.analysis.totalCosts, null);
+  assert.equal(record.analysis.netProfit, null);
+  assert.equal(record.analysis.netMarginPct, null);
+  assert.equal(record.analysis.costBreakdown, null);
+});
+
+test('watchlist sanitizes malformed persisted net economics instead of trusting them', async () => {
+  const seedStore = createWatchlistStore(fakeStorage(), {
+    now: () => new Date('2026-09-12T21:00:00.000Z')
+  });
+  const valid = await seedStore.save(product(1), analysis());
+
+  valid.analysis.costsApplied = true;
+  valid.analysis.totalCosts = 'not-a-number';
+  valid.analysis.netProfit = Number.POSITIVE_INFINITY;
+  valid.analysis.netMarginPct = 'bad';
+  valid.analysis.costBreakdown = {
+    shipping: -10,
+    tax: 0,
+    secretFee: 900
+  };
+
+  const storage = fakeStorage({ [WATCHLIST_STORAGE_KEY]: [valid] });
+  const store = createWatchlistStore(storage);
+  const [record] = await store.list();
+
+  assert.equal(record.analysis.costsApplied, true);
+  assert.equal(record.analysis.totalCosts, null);
+  assert.equal(record.analysis.netProfit, null);
+  assert.equal(record.analysis.netMarginPct, null);
+  assert.deepEqual(record.analysis.costBreakdown, { tax: 0 });
+  assert.equal(JSON.stringify(record).includes('secretFee'), false);
+});
+
 test('watchlist deduplicates updates by canonical product URL', async () => {
   const storage = fakeStorage();
   const store = createWatchlistStore(storage, {
