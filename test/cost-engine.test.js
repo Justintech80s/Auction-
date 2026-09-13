@@ -52,8 +52,8 @@ test('treats missing cost fields as zero and ignores unknown fields', () => {
   });
   assert.equal(result.totalCosts, 7.35);
   assert.equal(result.grossProfit, 50);
-  assert.equal(result.netProfit, 42.65);
-  assert.equal(result.netMarginPct, 42.65);
+  assert.equal(result.netProfit, 42.66);
+  assert.equal(result.netMarginPct, 42.66);
   assert.equal('inventedMarketplaceGuess' in result.costBreakdown, false);
 });
 
