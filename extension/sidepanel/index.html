@@ -19,6 +19,41 @@
 
     <p id="panel-message" class="panel-message">Open a supported product page to begin.</p>
 
+    <section class="cost-card" aria-labelledby="cost-heading">
+      <div>
+        <p class="label">Deal Costs</p>
+        <h2 id="cost-heading">Optional net-profit inputs</h2>
+        <p class="helper-text">Auction does not guess marketplace fees. Leave fields blank to keep gross-only analysis.</p>
+      </div>
+
+      <div class="cost-grid">
+        <label class="cost-field" for="cost-marketplace-fee">
+          <span>Marketplace fee</span>
+          <input id="cost-marketplace-fee" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+        <label class="cost-field" for="cost-shipping">
+          <span>Shipping</span>
+          <input id="cost-shipping" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+        <label class="cost-field" for="cost-tax">
+          <span>Tax</span>
+          <input id="cost-tax" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+        <label class="cost-field" for="cost-repairs">
+          <span>Repairs</span>
+          <input id="cost-repairs" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+        <label class="cost-field" for="cost-payment-processing">
+          <span>Payment processing</span>
+          <input id="cost-payment-processing" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+        <label class="cost-field" for="cost-holding">
+          <span>Holding cost</span>
+          <input id="cost-holding" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00">
+        </label>
+      </div>
+    </section>
+
     <section id="analysis-result" class="analysis-card" hidden>
       <div class="product-block">
         <p class="label">Product</p>
@@ -29,7 +64,10 @@
         <div class="metric"><dt>Current Price</dt><dd id="current-price">—</dd></div>
         <div class="metric"><dt>Estimated Value</dt><dd id="estimated-value">—</dd></div>
         <div class="metric"><dt>Value Range</dt><dd id="value-range">—</dd></div>
-        <div class="metric"><dt>Potential Profit</dt><dd id="potential-profit">—</dd></div>
+        <div class="metric"><dt>Gross Profit</dt><dd id="potential-profit">—</dd></div>
+        <div class="metric"><dt>Total Costs</dt><dd id="total-costs">—</dd></div>
+        <div class="metric"><dt>Net Profit</dt><dd id="net-profit">—</dd></div>
+        <div class="metric"><dt>Net Margin</dt><dd id="net-margin">—</dd></div>
         <div class="metric"><dt>Confidence</dt><dd id="confidence">—</dd></div>
         <div class="metric"><dt>Verified Sold</dt><dd id="verified-sold-count">0</dd></div>
       </dl>
