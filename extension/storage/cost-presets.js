@@ -1,4 +1,5 @@
 export const COST_PRESET_STORAGE_KEY = 'auctionCostPresetsV1';
+export const DEFAULT_COST_PRESET_STORAGE_KEY = 'auctionDefaultCostPresetV1';
 export const MAX_COST_PRESETS = 20;
 
 const COST_FIELDS = Object.freeze([
@@ -15,8 +16,8 @@ function clone(value) {
 }
 
 function assertStorageArea(storageArea) {
-  if (!storageArea || typeof storageArea.get !== 'function' || typeof storageArea.set !== 'function') {
-    throw new TypeError('storageArea must provide get and set');
+  if (!storageArea || typeof storageArea.get !== 'function' || typeof storageArea.set !== 'function' || typeof storageArea.remove !== 'function') {
+    throw new TypeError('storageArea must provide get, set, and remove');
   }
   return storageArea;
 }
@@ -30,6 +31,11 @@ function normalizeName(name) {
 
 function keyForName(name) {
   return normalizeName(name).toLocaleLowerCase('en-US');
+}
+
+function normalizePresetKey(value) {
+  const normalized = String(value ?? '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
+  return normalized || null;
 }
 
 function normalizeUpdatedAt(value) {
@@ -125,6 +131,29 @@ export function createCostPresetStore(storageArea, {
     return cleaned;
   }
 
+  async function readDefaultKey() {
+    const stored = await storage.get(DEFAULT_COST_PRESET_STORAGE_KEY);
+    const raw = stored?.[DEFAULT_COST_PRESET_STORAGE_KEY];
+    if (raw === undefined) return null;
+    if (typeof raw !== 'string') {
+      await storage.remove(DEFAULT_COST_PRESET_STORAGE_KEY);
+      return null;
+    }
+    const key = normalizePresetKey(raw);
+    if (!key || key !== raw) {
+      await storage.remove(DEFAULT_COST_PRESET_STORAGE_KEY);
+      return null;
+    }
+    return key;
+  }
+
+  async function clearDefault() {
+    const key = await readDefaultKey();
+    if (!key) return false;
+    await storage.remove(DEFAULT_COST_PRESET_STORAGE_KEY);
+    return true;
+  }
+
   return Object.freeze({
     async save(name, costs) {
       const normalizedName = normalizeName(name);
@@ -146,19 +175,44 @@ export function createCostPresetStore(storageArea, {
     },
 
     async remove(nameOrKey) {
-      const raw = String(nameOrKey ?? '').trim();
-      if (!raw) return false;
-      const key = raw.toLocaleLowerCase('en-US').replace(/\s+/g, ' ');
+      const key = normalizePresetKey(nameOrKey);
+      if (!key) return false;
       const presets = await readPresets();
       const next = presets.filter(preset => preset.key !== key);
       if (next.length === presets.length) return false;
       await storage.set({ [COST_PRESET_STORAGE_KEY]: clone(next) });
+      const defaultKey = await readDefaultKey();
+      if (defaultKey === key) await storage.remove(DEFAULT_COST_PRESET_STORAGE_KEY);
       return true;
     },
 
     async list() {
       const presets = await readPresets();
       return clone([...presets].reverse());
-    }
+    },
+
+    async setDefault(nameOrKey) {
+      const key = normalizePresetKey(nameOrKey);
+      if (!key) throw new TypeError('saved preset key is required');
+      const presets = await readPresets();
+      const preset = presets.find(candidate => candidate.key === key);
+      if (!preset) throw new TypeError('default must reference a saved preset');
+      await storage.set({ [DEFAULT_COST_PRESET_STORAGE_KEY]: key });
+      return clone(preset);
+    },
+
+    async getDefault() {
+      const key = await readDefaultKey();
+      if (!key) return null;
+      const presets = await readPresets();
+      const preset = presets.find(candidate => candidate.key === key);
+      if (!preset) {
+        await storage.remove(DEFAULT_COST_PRESET_STORAGE_KEY);
+        return null;
+      }
+      return clone(preset);
+    },
+
+    clearDefault
   });
 }
