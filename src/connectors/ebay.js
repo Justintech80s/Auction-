@@ -3,8 +3,12 @@ import { validateOutboundUrl } from '../security/url-policy.js';
 const EBAY_BROWSE_SEARCH_URL = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 const EBAY_ALLOWED_HOSTS = ['api.ebay.com'];
 
+function runtimeEnv() {
+  return globalThis.process?.env || {};
+}
+
 export async function searchEbay(query, options = {}) {
-  const accessToken = options.accessToken || process.env.EBAY_ACCESS_TOKEN;
+  const accessToken = options.accessToken || runtimeEnv().EBAY_ACCESS_TOKEN;
   if (!accessToken) {
     throw new Error('EBAY_ACCESS_TOKEN is required to search eBay');
   }

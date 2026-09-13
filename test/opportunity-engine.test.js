@@ -54,3 +54,56 @@ test('rejects missing or invalid acquisition prices', () => {
   assert.throws(() => evaluateOpportunity({ valuation: { estimate: 100, confidence: 0.8 } }), /acquisitionPrice/);
   assert.throws(() => evaluateOpportunity({ acquisitionPrice: -1, valuation: { estimate: 100, confidence: 0.8 } }), /acquisitionPrice/);
 });
+
+test('sold evidence gate prevents strong_buy without verified sold authority', () => {
+  const result = evaluateOpportunity({
+    acquisitionPrice: 60,
+    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
+    security: { decision: 'allow' },
+    soldEvidence: {
+      status: 'ok',
+      verifiedCount: 0,
+      quality: 0,
+      risk: { decision: 'allow' }
+    }
+  });
+
+  assert.notEqual(result.decision, 'strong_buy');
+  assert.equal(result.soldEvidenceGateRequested, true);
+  assert.equal(result.soldEvidenceGatePassed, false);
+});
+
+test('verified sold authority allows strong_buy when all other thresholds pass', () => {
+  const result = evaluateOpportunity({
+    acquisitionPrice: 60,
+    valuation: { estimate: 120, low: 100, high: 140, confidence: 0.9 },
+    security: { decision: 'allow' },
+    soldEvidence: {
+      status: 'ok',
+      verifiedCount: 2,
+      quality: 0.8,
+      risk: { decision: 'allow' }
+    }
+  });
+
+  assert.equal(result.decision, 'strong_buy');
+  assert.equal(result.soldEvidenceGatePassed, true);
+});
+
+test('sold evidence Guardian review or reject forces manual_review', () => {
+  for (const decision of ['review', 'reject']) {
+    const result = evaluateOpportunity({
+      acquisitionPrice: 40,
+      valuation: { estimate: 120, low: 100, high: 140, confidence: 0.95 },
+      security: { decision: 'allow' },
+      soldEvidence: {
+        status: 'ok',
+        verifiedCount: 2,
+        quality: 0.9,
+        risk: { decision }
+      }
+    });
+
+    assert.equal(result.decision, 'manual_review');
+  }
+});
