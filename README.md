@@ -6,9 +6,9 @@ Auction is an experimental browser-native shopping assistant and marketplace-int
 
 **Runnable valuation core + sold-evidence layer + Guardian security + Opportunity engine + Manifest V3 browser extension + bounded local watchlist.**
 
-The repository now includes a Chromium browser extension that can detect supported shopping product pages, normalize the product, send it through Auction's existing analysis pipeline, and render the result in a side panel. The browser layer does not duplicate Auction's pricing or recommendation rules; the existing pipeline remains authoritative.
+The repository includes a Chromium browser extension that can detect supported shopping product pages, normalize the product, send it through Auction's existing analysis pipeline, and render the result in a side panel. The browser layer does not duplicate Auction's pricing or recommendation rules; the existing pipeline remains authoritative.
 
-The extension can be loaded locally without the Base44 application. Live provider-backed marketplace analysis still depends on approved/configured data access and runtime credentials where required. Credentials must not be embedded in the extension bundle or committed to GitHub.
+The browser release is assembled as a self-contained unpacked package so its service-worker imports remain inside the extension root. Live provider-backed marketplace analysis still depends on approved/configured data access and a secure runtime credential boundary where required. Credentials must not be embedded in the extension bundle or committed to GitHub.
 
 ## Browser Shopping Assistant
 
@@ -37,10 +37,11 @@ The extension includes:
 - `strong_buy`, `buy`, `fair`, `overpriced`, `avoid`, and `manual_review` decisions rendered exactly as returned by Auction
 - a real local Save control backed by `chrome.storage.local`
 - URL-deduplicated watchlist storage capped at 200 records
+- a deterministic release-security gate for the generated extension package
 
 See [`docs/BROWSER_EXTENSION.md`](docs/BROWSER_EXTENSION.md) for exact installation steps, permissions, privacy boundaries, known limitations, and testing guidance.
 
-## Install the Extension Locally
+## Build and Install the Extension Locally
 
 Requirements: Node.js 20 or newer.
 
@@ -48,6 +49,7 @@ Requirements: Node.js 20 or newer.
 git clone https://github.com/Justintech80s/Auction-.git
 cd Auction-
 npm test
+npm run build:extension
 ```
 
 Then:
@@ -55,10 +57,12 @@ Then:
 1. Open `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Select **Load unpacked**.
-4. Choose the repository's `extension/` directory.
+4. Choose `dist/auction-extension/`.
 5. Open a supported product page and open the Auction side panel.
 
-For Microsoft Edge, use `edge://extensions` and load the same `extension/` directory.
+For Microsoft Edge, use `edge://extensions` and load the same `dist/auction-extension/` directory.
+
+Do not use the source `extension/` directory as the final unpacked release root. The build command creates the self-contained package containing both the browser layer and the Auction pipeline modules required by its service worker.
 
 Deterministic tests do not require marketplace or AI credentials.
 
@@ -167,6 +171,8 @@ Product-page text is treated as untrusted data. The extension is designed not to
 
 The local watchlist stores only normalized product metadata and a bounded analysis summary. It is capped at 200 records, deduplicates by canonical product URL, evicts the oldest record when full, and removes malformed persisted entries during cleanup.
 
+The generated release package is statically checked for dynamic executable code, remote script/module loading, common HTML injection sinks, Node-only `process.env` access, and obvious committed credential patterns.
+
 ## Provider Credentials
 
 No real credentials belong in GitHub or the browser extension bundle.
@@ -215,6 +221,9 @@ extension/
   storage/
     watchlist.js
 
+scripts/
+  build-extension.mjs
+
 src/
   intelligence.js
   opportunity.js
@@ -234,6 +243,9 @@ src/
   security/
   ai/
 
+dist/auction-extension/
+  ...generated self-contained unpacked extension package (gitignored)
+
 test/
   extension-adapter-contract.test.js
   extension-adapters.test.js
@@ -244,6 +256,7 @@ test/
   extension-view-model.test.js
   extension-sidepanel.test.js
   extension-watchlist.test.js
+  extension-release-security.test.js
   ...backend valuation/security/provider tests
 
 .github/workflows/
@@ -267,7 +280,7 @@ docs/
 5. **Treat external content as untrusted** — marketplace text and metadata are data, not instructions.
 6. **Legitimate data access** — production integrations should use permitted APIs or authorized sources.
 7. **Privacy by design** — do not collect or persist credentials, checkout data, raw pages, or unnecessary upstream content.
-8. **Testable boundaries** — adapters, messaging, valuation, sold evidence, Guardian, Opportunity, UI mapping, and persistence are independently testable.
+8. **Testable boundaries** — adapters, messaging, valuation, sold evidence, Guardian, Opportunity, UI mapping, persistence, and release packaging are independently testable.
 
 ## Known Limitations
 
@@ -276,12 +289,11 @@ docs/
 - Safari packaging is not implemented yet.
 - The browser extension does not automate checkout or purchasing.
 - The watchlist is local to browser storage and is not account-synced.
-- Provider-backed live valuation/sold evidence requires approved runtime access and credentials; deterministic tests use fixtures/mocks.
+- Provider-backed live valuation/sold evidence requires approved runtime access and a secure credential boundary; deterministic tests use fixtures/mocks and the extension package contains no provider credentials.
 - The current Opportunity profit figure does not yet include every real-world cost such as marketplace fees, shipping, taxes, repairs, payment processing, or holding costs.
 
 ## Next Engineering Milestones
 
-- complete browser-extension security/release-candidate review and CodeQL validation
 - establish a secure production credential/backend boundary for live browser provider calls
 - add net-profit/cost modeling for fees, shipping, taxes, repairs, processing, and holding costs
 - add more marketplace connectors under the same trust-boundary rules
