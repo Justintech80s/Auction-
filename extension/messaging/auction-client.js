@@ -50,7 +50,7 @@ export function createAuctionClient({ analyze } = {}) {
     }
 
     try {
-      const analysis = await analyze(validated.payload.product);
+      const analysis = await analyze(validated.payload.product, validated.payload.costs);
       if (!analysis || typeof analysis !== 'object' || Array.isArray(analysis)) {
         throw new TypeError('analysis must be an object');
       }
@@ -63,8 +63,11 @@ export function createAuctionClient({ analyze } = {}) {
 
   return Object.freeze({
     handleMessage,
-    analyzeProduct(product) {
-      return handleMessage(createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, { product }));
+    analyzeProduct(product, costs) {
+      return handleMessage(createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, {
+        product,
+        ...(costs === undefined ? {} : { costs })
+      }));
     }
   });
 }
