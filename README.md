@@ -43,6 +43,16 @@ See [`docs/BROWSER_EXTENSION.md`](docs/BROWSER_EXTENSION.md) for exact installat
 
 ## Build and Install the Extension Locally
 
+### Download the Experimental Build
+
+**[⬇ Download Auction-Browser-Extension-v1.0.0.zip](Auction-Browser-Extension-v1.0.0.zip)**
+
+> **Experimental developer build:** Auction Browser Extension v1.0.0 is provided for testing and evaluation. It is not currently a Chrome Web Store or Microsoft Edge Add-ons production release. Marketplace layouts and experimental features may change, and live provider-backed valuation or sold-data features can require approved data access through a secure backend. Do not place provider credentials inside the extension.
+
+To try the experimental build, download the ZIP, unzip it, open `chrome://extensions` in Chrome or `edge://extensions` in Edge, enable **Developer mode**, choose **Load unpacked**, and select the unzipped `auction-extension` folder. Open a supported product page and then open the Auction side panel.
+
+### Build from Source
+
 Requirements: Node.js 20 or newer.
 
 ```bash
