@@ -5,6 +5,9 @@ on:
     branches:
       - release-artifact-v1
 
+permissions:
+  contents: write
+
 jobs:
   package:
     runs-on: ubuntu-latest
@@ -13,6 +16,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Verify release branch matches main source
+        run: |
+          git fetch origin main
+          git diff --exit-code origin/main -- . ':(exclude).github/workflows/release-artifact.yml'
       - run: npm test
       - run: npm run build:extension
       - name: Package extension ZIP
@@ -24,3 +31,52 @@ jobs:
           name: Auction-Browser-Extension-v1.0.0
           path: dist/Auction-Browser-Extension-v1.0.0.zip
           if-no-files-found: error
+      - name: Publish ZIP and install guide to main
+        run: |
+          cp dist/Auction-Browser-Extension-v1.0.0.zip /tmp/Auction-Browser-Extension-v1.0.0.zip
+          cat > /tmp/HOW_TO_INSTALL_AUCTION_EXTENSION.md <<'EOF'
+          # Install Auction Browser Extension
+
+          The ready-to-use package is `Auction-Browser-Extension-v1.0.0.zip` in the root of this repository.
+
+          ## Google Chrome
+
+          1. Download `Auction-Browser-Extension-v1.0.0.zip` from this repository.
+          2. Unzip the file on your computer.
+          3. Open Chrome and go to `chrome://extensions/`.
+          4. Turn on **Developer mode** in the upper-right corner.
+          5. Click **Load unpacked**.
+          6. Select the unzipped `auction-extension` folder. Do not select the ZIP itself.
+          7. Auction will appear in your extensions list. Pin it from Chrome's Extensions menu if you want quick access.
+          8. Open a supported product page on eBay US, Amazon US, Walmart US, or Best Buy US, then open the Auction side panel.
+
+          ## Microsoft Edge
+
+          1. Download and unzip `Auction-Browser-Extension-v1.0.0.zip`.
+          2. Open Edge and go to `edge://extensions/`.
+          3. Turn on **Developer mode**.
+          4. Click **Load unpacked**.
+          5. Select the unzipped `auction-extension` folder.
+          6. Open a supported shopping product page and use the Auction side panel.
+
+          ## Updating Auction Later
+
+          Download the newer ZIP, unzip it, replace your old local extension folder, then return to the browser extensions page and click **Reload** on Auction.
+
+          ## Important
+
+          Auction is a Manifest V3 Chromium extension. The package contains no provider credentials. Live provider-backed marketplace or sold-data features may require approved data access through a secure runtime/backend boundary; credentials should never be added directly to the extension package.
+          EOF
+          git fetch origin main
+          git checkout -B main origin/main
+          cp /tmp/Auction-Browser-Extension-v1.0.0.zip ./Auction-Browser-Extension-v1.0.0.zip
+          cp /tmp/HOW_TO_INSTALL_AUCTION_EXTENSION.md ./HOW_TO_INSTALL_AUCTION_EXTENSION.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Auction-Browser-Extension-v1.0.0.zip HOW_TO_INSTALL_AUCTION_EXTENSION.md
+          if git diff --cached --quiet; then
+            echo "Release files already match main."
+            exit 0
+          fi
+          git commit -m "Add Auction browser extension ZIP and install guide"
+          git push origin main
