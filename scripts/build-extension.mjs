@@ -8,6 +8,7 @@ const COPY_DIRECTORIES = Object.freeze([
   'adapters',
   'content',
   'messaging',
+  'popup',
   'sidepanel',
   'storage'
 ]);
@@ -51,6 +52,25 @@ export async function buildExtensionPackage({
   await writeFile(
     path.join(outputDir, 'service-worker.js'),
     releaseServiceWorker,
+    'utf8'
+  );
+
+  const messagesSource = await readFile(
+    path.join(extensionRoot, 'messaging', 'messages.js'),
+    'utf8'
+  );
+  const releaseMessages = messagesSource.replace(
+    "from '../../src/product-search/contracts.js';",
+    "from '../src/product-search/contracts.js';"
+  );
+
+  if (releaseMessages.includes("from '../../src/")) {
+    throw new Error('release messaging contains an import outside the extension package');
+  }
+
+  await writeFile(
+    path.join(outputDir, 'messaging', 'messages.js'),
+    releaseMessages,
     'utf8'
   );
 
