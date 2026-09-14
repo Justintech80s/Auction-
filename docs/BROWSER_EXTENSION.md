@@ -1,245 +1,191 @@
 # Auction Browser Extension
 
-Auction includes a Chromium Manifest V3 shopping assistant that detects supported product pages, sends normalized product data through Auction's existing valuation and Guardian pipeline, and displays the result in a browser side panel.
+Auction v1.0.0 is a Chromium Manifest V3 shopping assistant with two complementary entry paths:
 
-The extension is intentionally thin: marketplace adapters understand the current page, while valuation, sold-evidence handling, Opportunity classification, and Guardian decisions stay centralized in Auction's existing analysis code.
+1. fixed product-page detection on eBay US, Amazon US, Walmart US, and Best Buy US;
+2. an explicit **Scan This Product** action that can inspect one user-authorized normal webpage through `activeTab`.
 
-## Supported Browsers and Sites
+The browser layer collects bounded product evidence and renders results. Auction's deterministic valuation, matching, ranking, Guardian, sold-evidence, Opportunity, and cost logic remain authoritative.
 
-The current implementation targets Chromium browsers first:
+## Install the Ready-to-Use ZIP
 
-- Google Chrome
-- Microsoft Edge
+Download [`Auction-Browser-Extension-v1.0.0.zip`](../Auction-Browser-Extension-v1.0.0.zip), choose **Extract All**, then use **Load unpacked** in `chrome://extensions/` or `edge://extensions/` and select the extracted folder that directly contains `manifest.json`.
 
-Supported U.S. shopping domains:
+The release ZIP is intentionally flat: there is no extra `auction-extension` wrapper inside it.
+
+For the complete install walkthrough, see [`HOW_TO_INSTALL_AUCTION_EXTENSION.md`](../HOW_TO_INSTALL_AUCTION_EXTENSION.md).
+
+## Build from Source
+
+Requirements: Node.js 20 or newer.
+
+```bash
+git clone https://github.com/Justintech80s/Auction-.git
+cd Auction-
+npm test
+npm run build:extension
+```
+
+Load `dist/auction-extension/` with **Load unpacked**. The builder copies the required Auction modules into that self-contained package and rewrites runtime imports so nothing escapes the loaded extension folder.
+
+## Toolbar Scan Flow
+
+```text
+Auction A
+  -> Scan This Product
+  -> active tab only
+  -> bounded product evidence
+  -> identify product
+  -> search configured shopping providers
+  -> exact/similar matching
+  -> Guardian screening
+  -> New / Refurbished / Used groups
+  -> side-panel prices + Buy links
+```
+
+The one-shot scanner prefers structured Product JSON-LD and strong model/identifier/spec data. It can include a primary product image reference when available. Weak evidence can be sent to a configured secure visual-recognition backend. If confidence remains insufficient, Auction returns **Needs confirmation** rather than guessing.
+
+## Search and Matching
+
+Shopping providers implement a provider-neutral offer interface. Auction can preserve successful sources when another source fails and reports partial availability without leaking provider errors.
+
+Offers are normalized into bounded fields including store, title, HTTPS URL, model/specs, condition, item price, known shipping, availability, source trust tier, and source confidence.
+
+Product matching rejects or downgrades:
+
+- conflicting model/SKU/MPN/UPC/GTIN information
+- material RAM/storage/size/configuration mismatches
+- accessories and replacement parts
+- empty-box/parts-only listings
+- unrelated near-name results
+
+Results remain separated as **New**, **Refurbished**, **Used**, and unknown condition. Unknown condition is never silently promoted.
+
+Each condition group independently tracks:
+
+- cheapest item price
+- cheapest confirmed delivered total
+- best exact match
+
+Unknown shipping stays unknown and cannot win the confirmed-total ranking by being treated as zero.
+
+Guardian review/reject offers may remain visible for transparency, but they cannot become Auction's recommended cheapest/best-exact result.
+
+## Side Panel States
+
+The scan/search UI supports:
+
+- searching stores
+- needs confirmation
+- complete results
+- partial results
+- no exact match
+- provider unavailable
+- safe error
+
+Each offer can display store, price, known shipping/total, exact or similar match state, match confidence, Guardian state, availability, and a direct HTTPS **Buy** link. The link opens the merchant; Auction does not automate purchasing or checkout.
+
+The existing valuation, cost-preset, net-profit, and local-watchlist side-panel behavior remains available.
+
+## Permissions
+
+`manifest.json` requests:
+
+- `sidePanel` — Auction's result/analysis panel
+- `storage` — bounded browser-local watchlist and cost presets
+- `activeTab` — temporary access to the active page following the user's scan gesture
+- `scripting` — executes the one-shot product scanner in that authorized tab
+
+Permanent host permissions are still limited to:
 
 - `https://www.ebay.com/*`
 - `https://www.amazon.com/*`
 - `https://www.walmart.com/*`
 - `https://www.bestbuy.com/*`
 
-Safari is not part of this build. A future Safari Web Extension would require a separate Xcode packaging/conversion step.
+Auction does **not** request `<all_urls>`. The explicit scan does not create continuous arbitrary-page monitoring.
 
-## Build and Install Locally
+## Privacy Boundary
 
-Requirements: Node.js 20 or newer and a local clone of this repository.
-
-1. Clone the repository.
-
-   ```bash
-   git clone https://github.com/Justintech80s/Auction-.git
-   cd Auction-
-   ```
-
-2. Run the automated tests.
-
-   ```bash
-   npm test
-   ```
-
-3. Build the self-contained unpacked extension package.
-
-   ```bash
-   npm run build:extension
-   ```
-
-   The builder creates `dist/auction-extension/`. This release directory contains the Manifest V3 files plus the Auction pipeline modules required by the service worker, with all imports kept inside the extension package boundary.
-
-4. Open `chrome://extensions` in Chrome.
-5. Enable **Developer mode**.
-6. Choose **Load unpacked**.
-7. Select `dist/auction-extension/`.
-8. Open a supported product page and open the **Auction Shopping Assistant** side panel.
-
-For Microsoft Edge, use `edge://extensions`, enable Developer mode, choose **Load unpacked**, and select the same `dist/auction-extension/` directory.
-
-After changing extension or pipeline source files locally, rerun `npm run build:extension`, then reload the unpacked extension from the browser's extensions page.
-
-Do not load the source `extension/` directory directly as the release package. The service worker depends on Auction pipeline modules that are assembled into the self-contained `dist/auction-extension/` build.
-
-## What the Extension Does
-
-On a supported page, Auction follows this flow:
-
-```text
-Shopping Product Page
-        |
-        v
-Content Script + Site Adapter
-        |
-        v
-Normalized Product Record
-        |
-        v
-Manifest V3 Service Worker
-        |
-        v
-Auction Valuation / Sold Evidence / Guardian / Opportunity Pipeline
-        |
-        v
-Side Panel Result
-        |
-        +--> Optional Local Watchlist Save
-```
-
-The side panel can display:
-
-- detected product title
-- current asking price
-- estimated value and valuation range
-- potential profit from the existing Opportunity result
-- confidence
-- verified sold count
-- sold-evidence availability state
-- Guardian risk state
-- Auction's existing recommendation, including `strong_buy`, `buy`, `fair`, `overpriced`, `avoid`, or `manual_review`
-
-The UI does not independently recalculate or upgrade Auction's recommendation.
-
-## Sold Evidence and Asking Prices
-
-Auction keeps asking-price evidence and completed-sale evidence distinct.
-
-Active marketplace listings are **asking-price evidence**. They are never relabeled as verified sales merely because they appear on a marketplace page or in an active-listing API response.
-
-Live verified sold evidence depends on a configured data provider and any approval or credentials that provider requires. If a sold-evidence provider is not configured or is unavailable, the extension must show that state instead of inventing sold history. Provider failure can degrade to available asking-price analysis, but it must not bypass Guardian or create stronger evidence than Auction actually has.
-
-No provider credentials belong in the extension bundle or in GitHub. The release package intentionally contains no credentials. Production live-provider calls should use a controlled credential boundary rather than embedding secrets in the extension.
-
-## Permissions
-
-The current `manifest.json` requests only:
-
-- `sidePanel` — displays Auction alongside the shopping page.
-- `storage` — stores the bounded local watchlist in `chrome.storage.local`.
-
-Host permissions are limited to the four supported shopping domains above. The extension does not request `<all_urls>`.
-
-The content script runs in Chrome's isolated world. Web-accessible extension modules are limited to the files needed by the scanner, adapters, page observer, and message contract, and they are exposed only on the supported shopping domains.
-
-## Privacy and Local Watchlist
-
-Auction does not need full-page archives to analyze a supported product. Marketplace page content is treated as untrusted data and normalized into a bounded product contract.
-
-The browser extension is designed not to collect or store:
+The scanner is designed to collect only bounded product-relevant evidence. It does not intentionally collect or persist:
 
 - passwords
-- payment-card fields
+- payment/card data
 - checkout contents
 - private messages
-- arbitrary unrelated browsing content
-- raw product-page HTML snapshots
-- marketplace or provider credentials
+- cookies/session tokens
+- arbitrary browser history
+- full raw HTML snapshots
+- unrelated page text
+- provider credentials
 
-The local watchlist stores at most 200 records in `chrome.storage.local`. Records are deduplicated by canonical product URL and the oldest records are evicted first when the limit is exceeded.
+Cross-store search responses are ephemeral by default. The existing watchlist stores only its bounded normalized product/analysis summary when the user explicitly saves an item.
 
-A saved record contains normalized product metadata plus a selected, bounded analysis summary such as estimated value, range, confidence, verified sold count, potential profit, decision, Guardian state, and sold-evidence state. It does not persist raw upstream responses, arbitrary provenance blobs, credentials, or page HTML. Malformed persisted records are discarded during watchlist cleanup.
+## Secure Live-Provider Boundary
 
-The current watchlist is browser-local; it is not an account-synced cloud watchlist.
+Credentials never belong in the extension or GitHub.
 
-## Security Boundaries
+`src/connectors/product-search-backend.js` provides an HTTPS-only browser/backend boundary for:
 
-The product page is an untrusted input boundary. Text in a listing is data, not an instruction to the extension or analysis engine.
+- `identify_product`
+- `search_offers`
 
-Key controls include:
+Requests are normalized before transmission and upstream failures are reduced to safe public errors. A production backend can connect authorized visual/shopping APIs without exposing secrets to the extension.
 
-- normalized and bounded product fields before analysis
-- schema-validated, size-bounded extension messages
-- HTTPS product URLs
-- supported-domain manifest restrictions
-- no arbitrary page-controlled network destination
-- no remote executable code
-- no `eval` or dynamic `Function` execution in the release package
-- no HTML injection sinks for marketplace-controlled strings
-- no silent checkout or purchase automation
-- Guardian remains authoritative for review/reject decisions
-- the side panel cannot override or strengthen Auction's recommendation
-- asking evidence cannot masquerade as verified sold evidence
-- browser-safe environment access that does not assume Node's `process` global exists
-- a self-contained release package whose runtime imports do not escape the extension root
+Without that configured live backend/provider, Auction deliberately returns **Needs confirmation** or **Provider unavailable** instead of fabricating live cross-store prices. Deterministic tests and local matching/ranking logic do not require credentials.
 
-## Watchlist Save Behavior
+## Existing Valuation Pipeline
 
-After a successful analysis, the side panel exposes a real **Save** control. Saving writes the current normalized product and selected Auction analysis summary to local extension storage.
+Fixed supported product pages can still flow through Auction's established valuation path:
 
-Saving the same canonical product URL again updates that product instead of creating a duplicate. The store exposes save, remove, and list operations and cleans malformed persisted records when reading the watchlist.
+```text
+Product Page
+  -> site adapter
+  -> normalized product
+  -> service worker
+  -> valuation + sold evidence + Guardian + Opportunity + costs
+  -> side panel
+  -> optional local Save
+```
 
-## Testing and Release Security Gate
+Active listings remain asking-price evidence. Verified sales are accepted only through the sold-evidence layer and its provenance/verification checks.
 
-Run the full deterministic test suite with:
+## Testing and Release Gate
+
+Run:
 
 ```bash
 npm test
-```
-
-Build the installable unpacked package with:
-
-```bash
 npm run build:extension
 ```
 
-The repository includes tests for:
+Coverage includes:
 
-- marketplace adapter normalization
-- product scanning and SPA page-change observation
-- extension message validation and size limits
-- service-worker integration with Auction's existing pipeline
-- Guardian/manual-review preservation
-- sold-provider failure fallback
-- side-panel view-model behavior and rendering helpers
-- Manifest V3 domain/permission boundaries
-- watchlist sanitization, deduplication, eviction, removal, and malformed-record cleanup
-- release-package self-containment
-- absence of `<all_urls>`
-- absence of dynamic executable code and remote script imports
-- absence of HTML injection sinks in release code
-- absence of obvious credential material in the release package
-- absence of Node-only `process.env` access in browser-shipped modules
+- fixed marketplace adapters and SPA observation
+- explicit arbitrary-page `activeTab` scanning
+- Google Images/product-image style evidence
+- no raw unrelated page capture
+- product-identification confidence and visual fallback boundary
+- size-bounded messaging
+- cross-store provider partial failure
+- exact/similar/rejected matching
+- accessory and spec-conflict filtering
+- New / Refurbished / Used separation
+- cheapest item vs confirmed total
+- Guardian search-offer screening
+- side-panel result states and safe Buy links
+- existing valuation, watchlist, cost, and preset behavior
+- self-contained release imports
+- no `<all_urls>`
+- no dynamic executable code, remote scripts/modules, common HTML injection sinks, browser-shipped `process.env`, or obvious credential material
 
-Live marketplace DOM checks should be treated as manual smoke tests because retail sites can change markup independently of this repository.
+The main-branch release workflow builds `Auction-Browser-Extension-v1.0.0.zip`, verifies ZIP integrity, checks that `manifest.json` is directly at archive root, confirms Manifest V3/version 1.0.0, and publishes the verified ZIP back to the repository.
 
 ## Known Limitations
 
-- Initial support is limited to the U.S. eBay, Amazon, Walmart, and Best Buy domains listed above.
-- Marketplace layout changes can require adapter updates.
-- Safari packaging is not included yet.
-- The extension does not purchase items or automate checkout.
-- The local watchlist does not sync across browsers or devices.
-- Live provider-backed asking/sold evidence still requires approved provider access and a secure runtime credential boundary; credentials are not packaged with the extension.
-- Asking-price analysis can still be useful when sold evidence is unavailable, but the UI must clearly report the evidence state.
-
-## Repository Locations
-
-```text
-extension/
-  manifest.json
-  service-worker.js
-  adapters/
-  content/
-  messaging/
-  sidepanel/
-  storage/
-
-scripts/
-  build-extension.mjs
-
-src/
-  ...Auction analysis pipeline modules copied into the release package at build time
-
-dist/auction-extension/
-  ...generated unpacked extension package (gitignored)
-
-test/
-  extension-adapter-contract.test.js
-  extension-adapters.test.js
-  extension-scanner.test.js
-  extension-page-observer.test.js
-  extension-messaging.test.js
-  extension-integration.test.js
-  extension-view-model.test.js
-  extension-sidepanel.test.js
-  extension-watchlist.test.js
-  extension-release-security.test.js
-```
-
-Auction's browser layer is deliberately kept separate from its decision authority: the extension detects, transports, renders, and saves bounded local summaries; the existing Auction pipeline decides.
+- Live cross-store prices and credentialed visual recognition require an approved configured backend/provider.
+- Permanent automatic product-page adapters currently target the four U.S. shopping domains above; other webpages use explicit scanning.
+- Retail DOM/layout changes can require adapter maintenance.
+- Safari packaging is not included.
+- Auction does not automate checkout or guarantee final merchant totals/availability.
+- Browser-local watchlist/cost presets do not sync between devices.

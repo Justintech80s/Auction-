@@ -10,6 +10,11 @@ import {
   createAuctionClient,
   mapProductToAuctionInput
 } from '../extension/messaging/auction-client.js';
+import {
+  dellEvidence,
+  dellIdentity,
+  dellOffer
+} from './helpers/product-search-fixtures.js';
 
 const product = Object.freeze({
   source: 'ebay',
@@ -26,12 +31,16 @@ const product = Object.freeze({
   capturedAt: '2026-09-12T22:00:00.000Z'
 });
 
-test('exports the four browser-extension message types', () => {
+test('exports browser-extension analysis plus scan and search message types', () => {
   assert.deepEqual(MESSAGE_TYPES, {
     PRODUCT_DETECTED: 'AUCTION_PRODUCT_DETECTED',
     ANALYSIS_REQUEST: 'AUCTION_ANALYSIS_REQUEST',
     ANALYSIS_RESULT: 'AUCTION_ANALYSIS_RESULT',
-    ANALYSIS_ERROR: 'AUCTION_ANALYSIS_ERROR'
+    ANALYSIS_ERROR: 'AUCTION_ANALYSIS_ERROR',
+    SCAN_ACTIVE_PRODUCT_REQUEST: 'AUCTION_SCAN_ACTIVE_PRODUCT_REQUEST',
+    SCAN_ACTIVE_PRODUCT_RESULT: 'AUCTION_SCAN_ACTIVE_PRODUCT_RESULT',
+    CROSS_STORE_SEARCH_REQUEST: 'AUCTION_CROSS_STORE_SEARCH_REQUEST',
+    CROSS_STORE_SEARCH_RESULT: 'AUCTION_CROSS_STORE_SEARCH_RESULT'
   });
 });
 
@@ -87,6 +96,95 @@ test('analysis requests reject negative or non-finite costs', () => {
     product,
     costs: { tax: Number.POSITIVE_INFINITY }
   }), /tax/i);
+});
+
+test('scan request keeps positive tab id and strips arbitrary evidence fields', () => {
+  const message = createExtensionMessage(MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_REQUEST, {
+    tabId: 42,
+    evidence: {
+      ...dellEvidence(),
+      rawHtml: '<form>secret</form>',
+      cookie: 'session=secret'
+    }
+  });
+
+  assert.equal(message.payload.tabId, 42);
+  assert.equal(message.payload.evidence.model, 'Latitude 7420');
+  assert.equal('rawHtml' in message.payload.evidence, false);
+  assert.equal('cookie' in message.payload.evidence, false);
+});
+
+test('scan request rejects invalid tab ids', () => {
+  assert.throws(() => createExtensionMessage(MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_REQUEST, {
+    tabId: 0,
+    evidence: dellEvidence()
+  }), /tabId/i);
+});
+
+test('scan result allows only defined statuses and normalized identities', () => {
+  const message = createExtensionMessage(MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_RESULT, {
+    status: 'identified',
+    identity: { ...dellIdentity(), secret: 'remove-me' }
+  });
+  assert.equal(message.payload.status, 'identified');
+  assert.equal(message.payload.identity.model, 'Latitude 7420');
+  assert.equal('secret' in message.payload.identity, false);
+
+  assert.throws(() => createExtensionMessage(MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_RESULT, {
+    status: 'probably_found',
+    identity: dellIdentity()
+  }), /status/i);
+});
+
+test('cross-store request keeps only normalized identity fields', () => {
+  const message = createExtensionMessage(MESSAGE_TYPES.CROSS_STORE_SEARCH_REQUEST, {
+    identity: { ...dellIdentity(), rawHtml: '<html>secret</html>' }
+  });
+  assert.equal(message.payload.identity.model, 'Latitude 7420');
+  assert.equal('rawHtml' in message.payload.identity, false);
+});
+
+test('cross-store result normalizes offers, groups, and provider errors', () => {
+  const offer = dellOffer();
+  const message = createExtensionMessage(MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT, {
+    status: 'partial_results',
+    identity: dellIdentity(),
+    offers: [{ ...offer, secretToken: 'remove-me' }],
+    groups: {
+      new: { offerIds: [], cheapestItemId: null, cheapestTotalId: null, bestExactId: null },
+      refurbished: { offerIds: [], cheapestItemId: null, cheapestTotalId: null, bestExactId: null },
+      used: { offerIds: ['fixture-store:offer-1'], cheapestItemId: 'fixture-store:offer-1', cheapestTotalId: 'fixture-store:offer-1', bestExactId: 'fixture-store:offer-1' },
+      unknown: { offerIds: [], cheapestItemId: null, cheapestTotalId: null, bestExactId: null }
+    },
+    providerErrors: [{ source: 'broken', code: 'provider_unavailable', detail: 'token=secret' }]
+  });
+
+  assert.equal(message.payload.offers.length, 1);
+  assert.equal('secretToken' in message.payload.offers[0], false);
+  assert.deepEqual(message.payload.providerErrors, [{ source: 'broken', code: 'provider_unavailable' }]);
+  assert.equal(message.payload.groups.used.cheapestTotalId, 'fixture-store:offer-1');
+});
+
+test('cross-store result caps offer arrays at 60 and validates search status', () => {
+  const offers = Array.from({ length: 61 }, (_, index) => dellOffer({
+    sourceId: String(index),
+    url: `https://shop.example/products/${index}`
+  }));
+  assert.throws(() => createExtensionMessage(MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT, {
+    status: 'complete',
+    identity: dellIdentity(),
+    offers,
+    groups: {},
+    providerErrors: []
+  }), /offers/i);
+
+  assert.throws(() => createExtensionMessage(MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT, {
+    status: 'finished-ish',
+    identity: dellIdentity(),
+    offers: [],
+    groups: {},
+    providerErrors: []
+  }), /status/i);
 });
 
 test('rejects unrecognized and oversized messages', () => {

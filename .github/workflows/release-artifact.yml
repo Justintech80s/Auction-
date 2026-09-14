@@ -1,0 +1,64 @@
+name: Release Artifact
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - 'Auction-Browser-Extension-v1.0.0.zip'
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run full tests
+        run: npm test
+      - name: Build self-contained extension
+        run: npm run build:extension
+      - name: Package flat easy-install ZIP
+        run: |
+          rm -f Auction-Browser-Extension-v1.0.0.zip
+          cd dist/auction-extension
+          zip -r ../../Auction-Browser-Extension-v1.0.0.zip .
+      - name: Verify easy-install ZIP root and integrity
+        run: |
+          python - <<'PY'
+          import json
+          import zipfile
+
+          path = 'Auction-Browser-Extension-v1.0.0.zip'
+          with zipfile.ZipFile(path) as archive:
+              names = archive.namelist()
+              assert 'manifest.json' in names, 'manifest.json must be at ZIP root'
+              assert not any(name.startswith('auction-extension/') for name in names), 'nested auction-extension wrapper found'
+              assert archive.testzip() is None, 'ZIP integrity check failed'
+              manifest = json.loads(archive.read('manifest.json'))
+              assert manifest['manifest_version'] == 3
+              assert manifest['version'] == '1.0.0'
+              for required in ('service-worker.js', 'popup/index.html', 'sidepanel/index.html', 'content/active-scan.js', 'src/product-search/search.js'):
+                  assert required in names, f'{required} missing from ZIP'
+          print('Easy-install ZIP verified: manifest.json is at archive root.')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Auction-Browser-Extension-v1.0.0
+          path: Auction-Browser-Extension-v1.0.0.zip
+          if-no-files-found: error
+      - name: Publish ZIP to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Auction-Browser-Extension-v1.0.0.zip
+          if git diff --cached --quiet; then
+            echo "Release ZIP already matches main."
+            exit 0
+          fi
+          git commit -m "release: publish Auction easy-install v1.0.0 ZIP"
+          git push origin HEAD:main

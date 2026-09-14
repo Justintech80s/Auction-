@@ -36,22 +36,47 @@ async function withBundle(fn) {
   }
 }
 
-test('release bundle is a self-contained MV3 package with minimal permissions', async () => {
+test('release bundle is a self-contained MV3 v1.0.0 package with minimal explicit scan permissions', async () => {
   await withBundle(async (outputDir) => {
     const manifest = JSON.parse(await readFile(path.join(outputDir, 'manifest.json'), 'utf8'));
 
     assert.equal(manifest.manifest_version, 3);
-    assert.deepEqual(manifest.permissions, ['sidePanel', 'storage']);
+    assert.equal(manifest.version, '1.0.0');
+    assert.deepEqual(manifest.permissions, ['sidePanel', 'storage', 'activeTab', 'scripting']);
     assert.deepEqual(manifest.host_permissions, EXPECTED_HOSTS);
+    assert.equal(manifest.action.default_popup, 'popup/index.html');
     assert.ok(!JSON.stringify(manifest).includes('<all_urls>'));
 
     const workerPath = path.join(outputDir, manifest.background.service_worker);
     assert.equal((await stat(workerPath)).isFile(), true);
-    assert.equal((await stat(path.join(outputDir, 'src', 'pipeline.js'))).isFile(), true);
+    for (const requiredPath of [
+      ['src', 'pipeline.js'],
+      ['src', 'product-search', 'contracts.js'],
+      ['src', 'product-search', 'identify.js'],
+      ['src', 'product-search', 'matcher.js'],
+      ['src', 'product-search', 'offer-guardian.js'],
+      ['src', 'product-search', 'ranker.js'],
+      ['src', 'product-search', 'search.js'],
+      ['src', 'connectors', 'product-search-backend.js'],
+      ['popup', 'index.html'],
+      ['popup', 'app.js'],
+      ['sidepanel', 'index.html'],
+      ['sidepanel', 'app.js'],
+      ['content', 'active-scan.js']
+    ]) {
+      assert.equal((await stat(path.join(outputDir, ...requiredPath))).isFile(), true, `${requiredPath.join('/')} missing from release`);
+    }
 
     const workerSource = await readFile(workerPath, 'utf8');
     assert.doesNotMatch(workerSource, /from\s+['"]\.\.\/src\//);
     assert.match(workerSource, /from\s+['"]\.\/src\/pipeline\.js['"]/);
+    assert.match(workerSource, /from\s+['"]\.\/src\/product-search\/identify\.js['"]/);
+    assert.match(workerSource, /from\s+['"]\.\/src\/product-search\/ranker\.js['"]/);
+    assert.match(workerSource, /from\s+['"]\.\/src\/product-search\/search\.js['"]/);
+
+    const messagesSource = await readFile(path.join(outputDir, 'messaging', 'messages.js'), 'utf8');
+    assert.doesNotMatch(messagesSource, /from\s+['"]\.\.\/\.\.\/src\//);
+    assert.match(messagesSource, /from\s+['"]\.\.\/src\/product-search\/contracts\.js['"]/);
 
     for (const contentScript of manifest.content_scripts || []) {
       for (const relativePath of contentScript.js || []) {
