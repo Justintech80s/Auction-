@@ -40,9 +40,9 @@ export async function buildExtensionPackage({
     path.join(extensionRoot, 'service-worker.js'),
     'utf8'
   );
-  const releaseServiceWorker = serviceWorkerSource.replace(
-    "from '../src/pipeline.js';",
-    "from './src/pipeline.js';"
+  const releaseServiceWorker = serviceWorkerSource.replaceAll(
+    "from '../src/",
+    "from './src/"
   );
 
   if (releaseServiceWorker.includes("from '../src/")) {
