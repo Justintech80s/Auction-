@@ -128,6 +128,7 @@ export function createSidePanelApp({ documentLike, runtime, watchlistStore = nul
   async function saveCostPreset() { if (!costPresetStore) return; try { const name = documentLike.getElementById?.('cost-preset-name')?.value ?? ''; const costs = readCostInputs(documentLike); if (!costs) throw new TypeError('At least one cost is required'); const preset = await costPresetStore.save(name, costs); await refreshCostPresets(preset.key); setText(documentLike, 'cost-preset-status', 'Preset saved locally'); } catch { setText(documentLike, 'cost-preset-status', 'Preset could not be saved'); } }
   async function applySelectedCostPreset() { if (!costPresetStore) return; const key = String(documentLike.getElementById?.('cost-preset-select')?.value ?? '').trim(); if (!key) return; const preset = (await costPresetStore.list()).find(candidate => candidate.key === key); if (!preset) return; applyCostPreset(documentLike, preset.costs); const nameInput = documentLike.getElementById?.('cost-preset-name'); if (nameInput) nameInput.value = preset.name; setText(documentLike, 'cost-preset-status', 'Preset applied'); }
   async function setSelectedCostPresetDefault() { if (!costPresetStore) return; const key = String(documentLike.getElementById?.('cost-preset-select')?.value ?? '').trim(); if (!key) return; try { const preset = await costPresetStore.setDefault(key); applyCostPreset(documentLike, preset.costs); const nameInput = documentLike.getElementById?.('cost-preset-name'); if (nameInput) nameInput.value = preset.name; setText(documentLike, 'cost-preset-status', 'Default preset saved locally'); } catch { setText(documentLike, 'cost-preset-status', 'Default preset could not be saved'); } }
+  async function clearDefaultCostPreset() { if (!costPresetStore) return false; try { const selectedKey = String(documentLike.getElementById?.('cost-preset-select')?.value ?? '').trim(); const cleared = await costPresetStore.clearDefault(); await refreshCostPresets(selectedKey); setText(documentLike, 'cost-preset-status', cleared ? 'Default preset cleared' : 'No default preset set'); return cleared; } catch { setText(documentLike, 'cost-preset-status', 'Default preset could not be cleared'); return false; } }
   async function deleteSelectedCostPreset() { if (!costPresetStore) return; const key = String(documentLike.getElementById?.('cost-preset-select')?.value ?? '').trim(); if (!key) return; if (await costPresetStore.remove(key)) { await refreshCostPresets(); setText(documentLike, 'cost-preset-status', 'Preset deleted'); } }
   async function initializeCostPresets() { const preset = await initializeDefaultCostPreset(documentLike, costPresetStore); await refreshCostPresets(preset?.key ?? ''); if (preset) setText(documentLike, 'cost-preset-status', `Default: ${preset.name}`); }
 
@@ -145,10 +146,11 @@ export function createSidePanelApp({ documentLike, runtime, watchlistStore = nul
     documentLike.getElementById?.('apply-cost-preset')?.addEventListener?.('click', () => void applySelectedCostPreset());
     documentLike.getElementById?.('delete-cost-preset')?.addEventListener?.('click', () => void deleteSelectedCostPreset());
     documentLike.getElementById?.('set-default-cost-preset')?.addEventListener?.('click', () => void setSelectedCostPresetDefault());
+    documentLike.getElementById?.('clear-default-cost-preset')?.addEventListener?.('click', () => void clearDefaultCostPreset());
   }
   show('idle');
 
-  return Object.freeze({ analyze, saveCurrent, saveCostPreset, applySelectedCostPreset, setSelectedCostPresetDefault, deleteSelectedCostPreset, refreshCostPresets, initializeCostPresets, render: show, destroy() { runtime.onMessage?.removeListener?.(onMessage); } });
+  return Object.freeze({ analyze, saveCurrent, saveCostPreset, applySelectedCostPreset, setSelectedCostPresetDefault, clearDefaultCostPreset, deleteSelectedCostPreset, refreshCostPresets, initializeCostPresets, render: show, destroy() { runtime.onMessage?.removeListener?.(onMessage); } });
 }
 
 if (typeof document !== 'undefined' && globalThis.chrome?.runtime) {
