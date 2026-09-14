@@ -5,7 +5,9 @@
   "description": "Analyze supported shopping pages with Auction valuation, sold evidence, and Guardian risk checks.",
   "permissions": [
     "sidePanel",
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting"
   ],
   "host_permissions": [
     "https://www.ebay.com/*",
@@ -13,6 +15,9 @@
     "https://www.walmart.com/*",
     "https://www.bestbuy.com/*"
   ],
+  "action": {
+    "default_popup": "popup/index.html"
+  },
   "background": {
     "service_worker": "service-worker.js",
     "type": "module"
