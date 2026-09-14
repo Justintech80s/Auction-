@@ -1,14 +1,28 @@
 import { normalizeDetectedProduct } from '../adapters/contract.js';
+import {
+  normalizeOffer,
+  normalizeProductIdentity,
+  normalizeScanEvidence
+} from '../../src/product-search/contracts.js';
 
 export const MESSAGE_TYPES = Object.freeze({
   PRODUCT_DETECTED: 'AUCTION_PRODUCT_DETECTED',
   ANALYSIS_REQUEST: 'AUCTION_ANALYSIS_REQUEST',
   ANALYSIS_RESULT: 'AUCTION_ANALYSIS_RESULT',
-  ANALYSIS_ERROR: 'AUCTION_ANALYSIS_ERROR'
+  ANALYSIS_ERROR: 'AUCTION_ANALYSIS_ERROR',
+  SCAN_ACTIVE_PRODUCT_REQUEST: 'AUCTION_SCAN_ACTIVE_PRODUCT_REQUEST',
+  SCAN_ACTIVE_PRODUCT_RESULT: 'AUCTION_SCAN_ACTIVE_PRODUCT_RESULT',
+  CROSS_STORE_SEARCH_REQUEST: 'AUCTION_CROSS_STORE_SEARCH_REQUEST',
+  CROSS_STORE_SEARCH_RESULT: 'AUCTION_CROSS_STORE_SEARCH_RESULT'
 });
 
 const SUPPORTED_TYPES = new Set(Object.values(MESSAGE_TYPES));
 const MAX_MESSAGE_BYTES = 64 * 1024;
+const MAX_OFFERS = 60;
+const MAX_PROVIDER_ERRORS = 20;
+const CONDITIONS = Object.freeze(['new', 'refurbished', 'used', 'unknown']);
+const SCAN_STATUSES = new Set(['identified', 'needs_confirmation', 'unidentified']);
+const SEARCH_STATUSES = new Set(['complete', 'partial_results', 'no_exact_match', 'provider_unavailable']);
 const COST_FIELDS = Object.freeze([
   'marketplaceFee',
   'shipping',
@@ -86,11 +100,99 @@ function boundedString(value, name, maxLength) {
   return normalized;
 }
 
+function nullableBoundedString(value, name, maxLength) {
+  if (value === null || value === undefined || value === '') return null;
+  return boundedString(value, name, maxLength);
+}
+
 function normalizeErrorPayload(payload) {
   if (!isPlainObject(payload)) throw new TypeError('message payload must be an object');
   return Object.freeze({
     code: boundedString(payload.code, 'error code', 64),
     message: boundedString(payload.message, 'error message', 512)
+  });
+}
+
+function normalizeScanRequestPayload(payload) {
+  if (!isPlainObject(payload)) throw new TypeError('message payload must be an object');
+  const tabId = Number(payload.tabId);
+  if (!Number.isInteger(tabId) || tabId <= 0) throw new TypeError('tabId must be a positive integer');
+  return Object.freeze({
+    tabId,
+    evidence: normalizeScanEvidence(payload.evidence, { now: payload.evidence?.capturedAt })
+  });
+}
+
+function normalizeScanResultPayload(payload) {
+  if (!isPlainObject(payload)) throw new TypeError('message payload must be an object');
+  const status = boundedString(payload.status, 'scan status', 32);
+  if (!SCAN_STATUSES.has(status)) throw new TypeError('unsupported scan status');
+  if (status === 'identified' && !payload.identity) {
+    throw new TypeError('identified scan result requires identity');
+  }
+  const identity = payload.identity == null
+    ? null
+    : normalizeProductIdentity(payload.identity, { now: payload.identity?.capturedAt });
+  return Object.freeze({ status, identity });
+}
+
+function normalizeSearchRequestPayload(payload) {
+  if (!isPlainObject(payload)) throw new TypeError('message payload must be an object');
+  return Object.freeze({
+    identity: normalizeProductIdentity(payload.identity, { now: payload.identity?.capturedAt })
+  });
+}
+
+function normalizeOfferIds(value, name) {
+  if (value == null) return Object.freeze([]);
+  if (!Array.isArray(value)) throw new TypeError(`${name} must be an array`);
+  if (value.length > MAX_OFFERS) throw new RangeError(`${name} exceeds maximum entries`);
+  return Object.freeze(value.map((entry) => boundedString(entry, `${name} entry`, 384)));
+}
+
+function normalizeGroup(group, condition) {
+  const source = isPlainObject(group) ? group : {};
+  return Object.freeze({
+    offerIds: normalizeOfferIds(source.offerIds, `${condition} offerIds`),
+    cheapestItemId: nullableBoundedString(source.cheapestItemId, `${condition} cheapestItemId`, 384),
+    cheapestTotalId: nullableBoundedString(source.cheapestTotalId, `${condition} cheapestTotalId`, 384),
+    bestExactId: nullableBoundedString(source.bestExactId, `${condition} bestExactId`, 384)
+  });
+}
+
+function normalizeGroups(value) {
+  const source = isPlainObject(value) ? value : {};
+  return Object.freeze(Object.fromEntries(
+    CONDITIONS.map((condition) => [condition, normalizeGroup(source[condition], condition)])
+  ));
+}
+
+function normalizeProviderErrors(value) {
+  if (value == null) return Object.freeze([]);
+  if (!Array.isArray(value)) throw new TypeError('providerErrors must be an array');
+  if (value.length > MAX_PROVIDER_ERRORS) throw new RangeError('providerErrors exceeds maximum entries');
+  return Object.freeze(value.map((entry) => {
+    if (!isPlainObject(entry)) throw new TypeError('provider error must be an object');
+    return Object.freeze({
+      source: boundedString(entry.source, 'provider error source', 64),
+      code: boundedString(entry.code, 'provider error code', 64)
+    });
+  }));
+}
+
+function normalizeSearchResultPayload(payload) {
+  if (!isPlainObject(payload)) throw new TypeError('message payload must be an object');
+  const status = boundedString(payload.status, 'search status', 32);
+  if (!SEARCH_STATUSES.has(status)) throw new TypeError('unsupported search status');
+  if (!Array.isArray(payload.offers)) throw new TypeError('offers must be an array');
+  if (payload.offers.length > MAX_OFFERS) throw new RangeError('offers exceeds maximum entries');
+
+  return Object.freeze({
+    status,
+    identity: normalizeProductIdentity(payload.identity, { now: payload.identity?.capturedAt }),
+    offers: Object.freeze(payload.offers.map((offer) => normalizeOffer(offer))),
+    groups: normalizeGroups(payload.groups),
+    providerErrors: normalizeProviderErrors(payload.providerErrors)
   });
 }
 
@@ -104,6 +206,14 @@ function normalizePayload(type, payload) {
       return normalizeAnalysisPayload(payload);
     case MESSAGE_TYPES.ANALYSIS_ERROR:
       return normalizeErrorPayload(payload);
+    case MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_REQUEST:
+      return normalizeScanRequestPayload(payload);
+    case MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_RESULT:
+      return normalizeScanResultPayload(payload);
+    case MESSAGE_TYPES.CROSS_STORE_SEARCH_REQUEST:
+      return normalizeSearchRequestPayload(payload);
+    case MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT:
+      return normalizeSearchResultPayload(payload);
     default:
       throw new TypeError('unsupported message type');
   }
