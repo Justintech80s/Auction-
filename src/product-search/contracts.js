@@ -67,6 +67,12 @@ function normalizeConfidence(value) {
   return number;
 }
 
+function optionalEnum(value, allowed) {
+  if (value == null || value === '') return null;
+  const normalized = String(value).trim().toLowerCase();
+  return allowed.includes(normalized) ? normalized : null;
+}
+
 export function normalizeProductIdentity(input = {}, context = {}) {
   return Object.freeze({
     title: bounded(input.title, 512, true),
@@ -144,6 +150,9 @@ export function normalizeOffer(input = {}) {
     currency,
     availability: bounded(input.availability, 64),
     trustTier: input.trustTier === 'trusted' ? 'trusted' : 'broad',
-    sourceConfidence: normalizeConfidence(input.sourceConfidence ?? 0)
+    sourceConfidence: normalizeConfidence(input.sourceConfidence ?? 0),
+    matchClassification: optionalEnum(input.matchClassification, ['exact', 'similar', 'rejected']),
+    matchScore: input.matchScore == null ? null : normalizeConfidence(input.matchScore),
+    guardianDecision: optionalEnum(input.guardianDecision, ['allow', 'review', 'reject'])
   });
 }
