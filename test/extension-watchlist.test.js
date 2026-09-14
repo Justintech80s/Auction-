@@ -290,10 +290,10 @@ test('side panel Save action persists the current product and Auction analysis',
   assert.equal(documentLike.getElementById('save-item').textContent, 'Saved');
 });
 
-test('manifest grants storage only when the real watchlist is present', async () => {
+test('manifest keeps storage alongside explicit scan permissions when the real watchlist is present', async () => {
   const raw = await readFile(new URL('../extension/manifest.json', import.meta.url), 'utf8');
   const manifest = JSON.parse(raw);
-  assert.deepEqual(manifest.permissions, ['sidePanel', 'storage']);
+  assert.deepEqual(manifest.permissions, ['sidePanel', 'storage', 'activeTab', 'scripting']);
 });
 
 test('side panel markup includes the real Save control', async () => {
