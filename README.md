@@ -1,57 +1,67 @@
 # Auction
 
-Auction is an experimental browser-native shopping assistant and marketplace-intelligence engine. It turns product-page information into structured pricing evidence, valuation ranges, Guardian risk signals, and explainable opportunity decisions while keeping asking prices distinct from verified sold evidence.
+Auction is an experimental browser-native shopping assistant and marketplace-intelligence engine. It turns product-page information into structured pricing evidence, valuation ranges, Guardian risk signals, explainable opportunity decisions, and condition-separated cross-store price comparisons.
 
 ## Current Status
 
-**Runnable valuation core + sold-evidence layer + Guardian security + Opportunity engine + Manifest V3 browser extension + bounded local watchlist.**
+**Manifest V3 browser extension + explicit Scan This Product flow + cross-store search architecture + valuation/sold-evidence pipeline + Guardian security + Opportunity engine + local watchlist + explicit cost modeling.**
 
-The repository includes a Chromium browser extension that can detect supported shopping product pages, normalize the product, send it through Auction's existing analysis pipeline, and render the result in a side panel. The browser layer does not duplicate Auction's pricing or recommendation rules; the existing pipeline remains authoritative.
-
-The browser release is assembled as a self-contained unpacked package so its service-worker imports remain inside the extension root. Live provider-backed marketplace analysis still depends on approved/configured data access and a secure runtime credential boundary where required. Credentials must not be embedded in the extension bundle or committed to GitHub.
+Auction's deterministic matching, ranking, safety, popup, side-panel, valuation, and storage code is contained in the self-contained browser build. Live credentialed visual recognition and live cross-store shopping data require an approved secure backend/provider connection. Provider credentials are never embedded in the extension bundle.
 
 ## Browser Shopping Assistant
 
-Current browser support:
+Current Chromium targets:
 
 - Google Chrome
 - Microsoft Edge
 
-Current shopping domains:
+Automatic product-page detection remains enabled for:
 
 - eBay US
 - Amazon US
 - Walmart US
 - Best Buy US
 
+Auction v1.0.0 also adds an **explicit one-shot scan** that can be triggered on other normal webpages, including product/image-result pages such as Google Images. Click the Auction **A** and choose **Scan This Product**. Auction uses temporary `activeTab` access for that page only; it does not request permanent `<all_urls>` access or continuously inspect arbitrary browsing.
+
 The extension includes:
 
-- marketplace-specific product-page adapters
-- normalized, bounded product records
-- automatic first scan and debounced SPA/page-change rescanning
-- size-bounded extension messaging
-- Manifest V3 service worker orchestration
-- Auction valuation, sold-evidence, Guardian, and Opportunity integration
-- side-panel states for scanning, analyzing, results, unsupported pages, and safe errors
-- visible price, estimate, range, potential profit, confidence, verified sold count, Guardian state, and sold-evidence state
-- `strong_buy`, `buy`, `fair`, `overpriced`, `avoid`, and `manual_review` decisions rendered exactly as returned by Auction
-- a real local Save control backed by `chrome.storage.local`
-- URL-deduplicated watchlist storage capped at 200 records
-- a deterministic release-security gate for the generated extension package
+- toolbar popup with **Scan This Product** and **Open Auction Sidebar**
+- structured-data/title/model/spec/image product evidence collection
+- secure visual-recognition provider boundary for weak page evidence
+- normalized product identity and offer contracts
+- provider-neutral trusted/broader shopping search orchestration
+- exact/similar/rejected product matching
+- accessory, replacement-part, and material-spec mismatch rejection
+- Guardian screening for suspicious or implausible offers
+- separate **New**, **Refurbished**, **Used**, and unknown-condition results
+- cheapest item-price and cheapest confirmed delivered-total ranking
+- unknown shipping kept unknown instead of assumed to be free
+- direct merchant **Buy** links without checkout automation
+- Auction valuation, sold-evidence, Guardian, Opportunity, cost, preset, and watchlist integration
+- deterministic release-security testing
 
-See [`docs/BROWSER_EXTENSION.md`](docs/BROWSER_EXTENSION.md) for exact installation steps, permissions, privacy boundaries, known limitations, and testing guidance.
+See [`docs/BROWSER_EXTENSION.md`](docs/BROWSER_EXTENSION.md) for architecture, permissions, privacy boundaries, and testing details.
 
-## Build and Install the Extension Locally
-
-### Download the Experimental Build
+## Download and Install v1.0.0
 
 **[⬇ Download Auction-Browser-Extension-v1.0.0.zip](Auction-Browser-Extension-v1.0.0.zip)**
 
-> **Experimental developer build:** Auction Browser Extension v1.0.0 is provided for testing and evaluation. It is not currently a Chrome Web Store or Microsoft Edge Add-ons production release. Marketplace layouts and experimental features may change, and live provider-backed valuation or sold-data features can require approved data access through a secure backend. Do not place provider credentials inside the extension.
+> **Experimental developer build:** Auction v1.0.0 is for testing/evaluation and is not currently a Chrome Web Store or Microsoft Edge Add-ons production release.
 
-To try the experimental build, download the ZIP, unzip it, open `chrome://extensions` in Chrome or `edge://extensions` in Edge, enable **Developer mode**, choose **Load unpacked**, and select the unzipped `auction-extension` folder. Open a supported product page and then open the Auction side panel.
+The v1.0.0 release ZIP is **flat/easy-install**: after extracting it, `manifest.json` is directly inside the extracted folder.
 
-### Build from Source
+1. Download the ZIP and choose **Extract All**.
+2. Open `chrome://extensions/` or `edge://extensions/`.
+3. Enable **Developer mode**.
+4. Click **Load unpacked**.
+5. Select the extracted folder where `manifest.json` is directly visible.
+6. Do not select the ZIP itself and do not open the `content` folder.
+7. Pin Auction if desired, visit a page showing a product, click the **A**, and choose **Scan This Product**.
+
+Full instructions: [`HOW_TO_INSTALL_AUCTION_EXTENSION.md`](HOW_TO_INSTALL_AUCTION_EXTENSION.md).
+
+## Build from Source
 
 Requirements: Node.js 20 or newer.
 
@@ -62,144 +72,99 @@ npm test
 npm run build:extension
 ```
 
-Then:
+Load `dist/auction-extension/` with **Load unpacked**. The build step assembles all required Auction runtime modules inside the extension root; do not use the source `extension/` directory as the final release package.
 
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Select **Load unpacked**.
-4. Choose `dist/auction-extension/`.
-5. Open a supported product page and open the Auction side panel.
-
-For Microsoft Edge, use `edge://extensions` and load the same `dist/auction-extension/` directory.
-
-Do not use the source `extension/` directory as the final unpacked release root. The build command creates the self-contained package containing both the browser layer and the Auction pipeline modules required by its service worker.
-
-Deterministic tests do not require marketplace or AI credentials.
-
-## Implemented Analysis Behavior
-
-- asking-price versus sold-evidence classification
-- comparable deduplication
-- USD price normalization
-- robust extreme-outlier filtering
-- similarity-aware comparable ranking
-- evidence-weighted valuation
-- valuation ranges and confidence scoring
-- insufficient-evidence responses instead of fabricated certainty
-- Opportunity scoring from acquisition price versus valuation
-- sold-evidence gating for stronger recommendations
-- provider-neutral sold-evidence contract and registry
-- fixture sold-evidence provider for deterministic tests
-- eBay Marketplace Insights provider implementation for approved access
-- explicit `not_configured`, `ok`, and `unavailable` sold-evidence states
-- safe fallback to asking evidence when a sold provider fails
-- Guardian verification of sold-evidence freshness, provenance, duplicates, future timestamps, and verification claims
-- marketplace connector registry
-- official eBay Browse API connector for active/asking-price evidence
-- Guardian request validation and bounded field sizes
-- outbound HTTPS host allowlisting and SSRF/private-network blocking helpers
-- deterministic allow/review/reject risk scoring
-- optional bounded AI security analysis with timeout and malformed-output fallback
-- deterministic Guardian decisions remain authoritative over AI suggestions
-- provenance attached to protected valuation results
-- automated GitHub Actions tests and CodeQL workflow
-
-## Evidence Rules
-
-Auction treats active listings and completed sales as different evidence classes.
-
-The eBay Browse connector returns active listings, so those records are labeled **asking-price evidence**. They are not treated as completed sales.
-
-Verified sold evidence is accepted only through the sold-evidence layer and its verification/provenance checks. Live sold evidence depends on approved/configured provider access. If a provider is missing or unavailable, Auction reports that state rather than inventing sales data.
-
-## Protected Valuation Pipeline
+## Scan + Search Flow
 
 ```text
-Shopping Page / API Request
+User clicks Auction A
         |
         v
-Normalized Item Contract
+Scan This Product
         |
         v
-Auction Guardian Gateway
+One-shot activeTab scanner
         |
         v
-Asking Connector + Sold-Evidence Provider
+Product Identity
+(structured data / model / specs / image fallback)
         |
         v
-Comparable Ranking + Evidence Validation
+Trusted + broader shopping providers
         |
         v
-Valuation Engine
+Exact-match + Guardian screening
         |
         v
-Deterministic Risk Engine
+New / Refurbished / Used groups
         |
-        +--> Optional bounded AI Security Brain
+        +--> Cheapest Item Price
+        +--> Cheapest Confirmed Total
+        +--> Best Exact Match
         |
         v
-Opportunity Engine + Provenance
-        |
-        v
-Browser Side Panel / API Result
+Auction Side Panel + Merchant Buy Link
 ```
 
-Example direct pipeline usage:
+If identity confidence is too low, Auction reports **Needs confirmation**. If live shopping providers are unavailable or not configured, Auction reports **Provider unavailable** instead of fabricating prices.
 
-```js
-import { valueItem } from './src/pipeline.js';
+## Analysis and Deal Economics
 
-const result = await valueItem(
-  { brand: 'Sony', model: 'WM-2', category: 'Walkman' },
-  {
-    guardian: true,
-    source: 'ebay',
-    connectorOptions: { accessToken: process.env.EBAY_ACCESS_TOKEN },
-    acquisitionPrice: 125
-  }
-);
+Auction also provides:
 
-console.log(result.valuation);
-console.log(result.opportunity);
-console.log(result.soldEvidence);
-console.log(result.security);
-console.log(result.provenance);
-```
+- asking-price versus verified sold-evidence separation
+- comparable deduplication and similarity ranking
+- robust price-outlier filtering
+- evidence-weighted valuation ranges and confidence
+- Opportunity decisions: `strong_buy`, `buy`, `fair`, `overpriced`, `avoid`, `manual_review`
+- explicit optional costs for marketplace fees, shipping, tax, repairs, payment processing, and holding
+- gross and net profit/margin outputs
+- locally saved reusable cost presets, including a default preset
+- local watchlist storage capped at 200 URL-deduplicated records
 
-AI enrichment is optional. If no AI provider is supplied, Auction continues through the deterministic valuation and Guardian path. If AI fails, times out, or returns malformed output, deterministic results remain authoritative.
+Guardian remains authoritative. UI code and optional AI enrichment cannot silently upgrade a deterministic review/reject outcome.
 
-## Browser Privacy and Permissions
+## Privacy and Permissions
 
-The Manifest V3 extension currently requests only:
+Manifest V3 permissions:
 
 - `sidePanel`
 - `storage`
+- `activeTab`
+- `scripting`
 
-Host permissions are limited to the four supported U.S. shopping domains. The extension does not request `<all_urls>`.
+Permanent host permissions remain limited to eBay US, Amazon US, Walmart US, and Best Buy US for their fixed product-page content scripts. The explicit scan flow uses temporary `activeTab` permission following the user's click, so Auction does **not** request `<all_urls>`.
 
-Product-page text is treated as untrusted data. The extension is designed not to store passwords, card details, checkout contents, private messages, arbitrary unrelated browsing content, raw HTML snapshots, or provider credentials.
+The scanner is designed not to collect or persist passwords, payment-card information, checkout contents, private messages, arbitrary browser history, cookies/session tokens, raw full-page HTML, provider credentials, or unrelated page text.
 
-The local watchlist stores only normalized product metadata and a bounded analysis summary. It is capped at 200 records, deduplicates by canonical product URL, evicts the oldest record when full, and removes malformed persisted entries during cleanup.
+## Live Provider Boundary
 
-The generated release package is statically checked for dynamic executable code, remote script/module loading, common HTML injection sinks, Node-only `process.env` access, and obvious committed credential patterns.
+No provider credentials belong in GitHub or the browser extension.
 
-## Provider Credentials
+The extension contains a secure HTTPS backend connector for two credential-dependent actions:
 
-No real credentials belong in GitHub or the browser extension bundle.
+- `identify_product` — visual/product recognition fallback
+- `search_offers` — live cross-store shopping offers
 
-The eBay Browse connector requires an OAuth access token for live API use:
+A production backend can connect permitted retailer/shopping APIs behind that boundary. Without a configured provider, the browser code remains deterministic and safe but cannot manufacture live Internet prices.
 
-```js
-import { searchMarketplace } from './src/connectors/index.js';
+Existing eBay Browse and Marketplace Insights integrations likewise require approved provider access for live data.
 
-const listings = await searchMarketplace('ebay', 'Sony WM-2 Walkman', {
-  accessToken: process.env.EBAY_ACCESS_TOKEN
-});
-```
+## Release Security
 
-The Marketplace Insights sold-evidence provider likewise requires approved eBay access. Local deterministic tests use injected/fixture providers instead of real credentials.
+The generated package is tested for:
 
-For a production browser deployment, provider credentials should stay behind a controlled backend or another secure runtime boundary rather than being shipped in the extension package.
+- self-contained runtime imports inside the extension root
+- Manifest V3 and v1.0.0 version alignment
+- no `<all_urls>`
+- no `eval`, dynamic `Function`, remote scripts/modules, or HTML injection sinks
+- no browser-shipped `process.env` dependency
+- no obvious committed credentials
+- bounded extension messages and normalized page/provider data
+- Guardian authority over suspicious search offers
+- direct Buy links using normalized HTTPS offer URLs
+
+GitHub Actions runs the full deterministic test suite and builds the extension on each code change. The release workflow builds and verifies a flat ZIP whose archive root contains `manifest.json`.
 
 ## Repository Structure
 
@@ -207,119 +172,55 @@ For a production browser deployment, provider credentials should stay behind a c
 extension/
   manifest.json
   service-worker.js
+  popup/
   adapters/
-    contract.js
-    registry.js
-    ebay.js
-    amazon.js
-    walmart.js
-    bestbuy.js
-    generic.js
   content/
-    entry.js
-    index.js
-    scanner.js
-    page-observer.js
   messaging/
-    messages.js
-    auction-client.js
   sidepanel/
-    index.html
-    app.js
-    view-model.js
-    styles.css
   storage/
-    watchlist.js
+
+src/
+  pipeline.js
+  valuation.js
+  opportunity.js
+  product-search/
+    contracts.js
+    identify.js
+    matcher.js
+    offer-guardian.js
+    ranker.js
+    search.js
+  connectors/
+    product-search-backend.js
+  sold-evidence/
+  security/
+  ai/
 
 scripts/
   build-extension.mjs
 
-src/
-  intelligence.js
-  opportunity.js
-  pipeline.js
-  valuation.js
-  connectors/
-    index.js
-    ebay.js
-  sold-evidence/
-    provider-contract.js
-    registry.js
-    normalize.js
-    merge.js
-    providers/
-      fixture.js
-      ebay-marketplace-insights.js
-  security/
-  ai/
-
-dist/auction-extension/
-  ...generated self-contained unpacked extension package (gitignored)
-
 test/
-  extension-adapter-contract.test.js
-  extension-adapters.test.js
-  extension-scanner.test.js
-  extension-page-observer.test.js
-  extension-messaging.test.js
-  extension-integration.test.js
-  extension-view-model.test.js
-  extension-sidepanel.test.js
-  extension-watchlist.test.js
-  extension-release-security.test.js
-  ...backend valuation/security/provider tests
-
-.github/workflows/
-  tests.yml
-  codeql.yml
-
-docs/
-  BROWSER_EXTENSION.md
-  ARCHITECTURE.md
-  ROADMAP.md
-  DATA_QUALITY.md
-  SECURITY.md
+  ...deterministic valuation, browser, scan, search, Guardian, UI, storage, and release tests
 ```
-
-## Engineering Principles
-
-1. **Evidence over guesses** — valuation results should expose the evidence state instead of manufacturing certainty.
-2. **Sold and asking prices are different signals** — active listings are never silently promoted to verified sales.
-3. **Confidence should be explicit** — sparse, stale, or conflicting evidence lowers authority.
-4. **Guardian outranks AI and UI** — browser code and AI enrichment cannot silently override deterministic review/reject decisions.
-5. **Treat external content as untrusted** — marketplace text and metadata are data, not instructions.
-6. **Legitimate data access** — production integrations should use permitted APIs or authorized sources.
-7. **Privacy by design** — do not collect or persist credentials, checkout data, raw pages, or unnecessary upstream content.
-8. **Testable boundaries** — adapters, messaging, valuation, sold evidence, Guardian, Opportunity, UI mapping, persistence, and release packaging are independently testable.
 
 ## Known Limitations
 
-- Supported product detection is currently limited to eBay US, Amazon US, Walmart US, and Best Buy US.
-- Marketplace DOM/layout changes can require adapter maintenance.
+- Live cross-store prices and credentialed visual recognition require an approved/configured secure backend/provider; no secrets are packaged with the extension.
+- Retailer DOM/layout changes can require adapter maintenance.
+- Permanent automatic product-page detection currently targets eBay US, Amazon US, Walmart US, and Best Buy US; arbitrary-page scanning is explicit/user-triggered.
 - Safari packaging is not implemented yet.
-- The browser extension does not automate checkout or purchasing.
-- The watchlist is local to browser storage and is not account-synced.
-- Provider-backed live valuation/sold evidence requires approved runtime access and a secure credential boundary; deterministic tests use fixtures/mocks and the extension package contains no provider credentials.
-- The current Opportunity profit figure does not yet include every real-world cost such as marketplace fees, shipping, taxes, repairs, payment processing, or holding costs.
+- Auction does not automate purchasing or checkout.
+- The watchlist and cost presets are browser-local rather than account-synced.
+- Taxes, final shipping, stock, warranties, seller terms, and checkout totals remain controlled by the merchant.
 
-## Next Engineering Milestones
+## Engineering Principles
 
-- establish a secure production credential/backend boundary for live browser provider calls
-- add net-profit/cost modeling for fees, shipping, taxes, repairs, processing, and holding costs
-- add more marketplace connectors under the same trust-boundary rules
-- add durable/distributed rate limiting and durable security-event observability for production deployment
-- add production AI provider adapters behind the existing provider contract where they add measurable value
-- package a Safari Web Extension after the Chromium release path is stable
-
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the broader staged plan.
-
-## Portfolio Role
-
-Auction represents the commerce/search side of the Justintech80s software portfolio: browser-native software that converts noisy marketplace information into structured, explainable pricing intelligence while treating external evidence and AI output as untrusted by default.
-
-## Related Projects
-
-- [MovieFinder](https://github.com/Justintech80s/MovieFinder) — intelligent movie and streaming discovery
-- [Bunny](https://github.com/Justintech80s/Bunny) — noir-inspired interactive entertainment prototype
+1. **Evidence over guesses** — uncertainty is shown instead of hidden.
+2. **Sold and asking prices are different signals.**
+3. **Guardian outranks UI and optional AI.**
+4. **External page/provider content is untrusted data.**
+5. **Production integrations use permitted APIs/authorized sources and secure credential boundaries.**
+6. **Privacy by design** — explicit scan access, bounded evidence, no unnecessary page capture.
+7. **Testable boundaries** — scanning, identification, providers, matching, Guardian, ranking, UI, valuation, persistence, and packaging are independently testable.
 
 > A feature is considered implemented here only when corresponding source and reproducible verification are present.
