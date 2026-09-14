@@ -1,0 +1,26 @@
+name: Release Artifact
+
+on:
+  push:
+    branches:
+      - release-artifact-v1
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm test
+      - run: npm run build:extension
+      - name: Package extension ZIP
+        run: |
+          cd dist
+          zip -r Auction-Browser-Extension-v1.0.0.zip auction-extension
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Auction-Browser-Extension-v1.0.0
+          path: dist/Auction-Browser-Extension-v1.0.0.zip
+          if-no-files-found: error
