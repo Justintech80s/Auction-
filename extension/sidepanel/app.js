@@ -131,7 +131,9 @@ export function createSidePanelApp({ documentLike, runtime, watchlistStore = nul
   async function deleteSelectedCostPreset() { if (!costPresetStore) return; const key = String(documentLike.getElementById?.('cost-preset-select')?.value ?? '').trim(); if (!key) return; if (await costPresetStore.remove(key)) { await refreshCostPresets(); setText(documentLike, 'cost-preset-status', 'Preset deleted'); } }
   async function initializeCostPresets() { const preset = await initializeDefaultCostPreset(documentLike, costPresetStore); await refreshCostPresets(preset?.key ?? ''); if (preset) setText(documentLike, 'cost-preset-status', `Default: ${preset.name}`); }
 
-  async function analyze(product) { if (!product) { lastProduct = null; lastAnalysis = null; show('unsupported'); return; } lastProduct = product; lastAnalysis = null; setText(documentLike, 'save-item', 'Save'); show('analyzing'); try { const costs = readCostInputs(documentLike); const request = createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, { product, ...(costs === undefined ? {} : { costs }) }); const response = await runtime.sendMessage(request); if (response?.type !== MESSAGE_TYPES.ANALYSIS_RESULT) { show('error'); return; } lastAnalysis = response.payload.analysis; show('result', buildAnalysisViewModel(lastAnalysis, product)); } catch { lastAnalysis = null; show('error'); } }
+  const presetReady = costPresetStore ? initializeCostPresets().catch(() => undefined) : Promise.resolve();
+
+  async function analyze(product) { if (!product) { lastProduct = null; lastAnalysis = null; show('unsupported'); return; } lastProduct = product; lastAnalysis = null; setText(documentLike, 'save-item', 'Save'); show('analyzing'); try { await presetReady; const costs = readCostInputs(documentLike); const request = createExtensionMessage(MESSAGE_TYPES.ANALYSIS_REQUEST, { product, ...(costs === undefined ? {} : { costs }) }); const response = await runtime.sendMessage(request); if (response?.type !== MESSAGE_TYPES.ANALYSIS_RESULT) { show('error'); return; } lastAnalysis = response.payload.analysis; show('result', buildAnalysisViewModel(lastAnalysis, product)); } catch { lastAnalysis = null; show('error'); } }
   async function saveCurrent() { if (!watchlistStore || !lastProduct || !lastAnalysis) return; const button = documentLike.getElementById?.('save-item'); if (button) button.disabled = true; try { await watchlistStore.save(lastProduct, lastAnalysis); setText(documentLike, 'save-item', 'Saved'); } catch { setText(documentLike, 'save-item', 'Save failed'); } finally { if (button) button.disabled = false; } }
 
   const onMessage = message => { if (message?.type !== MESSAGE_TYPES.PRODUCT_DETECTED) return undefined; show('scanning'); void analyze(message?.payload?.product); return undefined; };
@@ -143,7 +145,6 @@ export function createSidePanelApp({ documentLike, runtime, watchlistStore = nul
     documentLike.getElementById?.('apply-cost-preset')?.addEventListener?.('click', () => void applySelectedCostPreset());
     documentLike.getElementById?.('delete-cost-preset')?.addEventListener?.('click', () => void deleteSelectedCostPreset());
     documentLike.getElementById?.('set-default-cost-preset')?.addEventListener?.('click', () => void setSelectedCostPresetDefault());
-    void initializeCostPresets();
   }
   show('idle');
 
