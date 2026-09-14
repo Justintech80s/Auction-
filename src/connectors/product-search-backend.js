@@ -1,4 +1,5 @@
 import {
+  normalizeOffer,
   normalizeProductIdentity,
   normalizeScanEvidence
 } from '../product-search/contracts.js';
@@ -60,13 +61,28 @@ export function createProductSearchBackend({
 
   return Object.freeze({
     name: 'product-search-backend',
+    trustTier: 'broad',
     async identifyProduct(input) {
-      const evidence = normalizeScanEvidence(input, { now: input?.capturedAt });
-      const result = await post({ action: 'identify_product', evidence });
-      if (result.status !== 'identified' || !result.identity) throw safeFailure();
-      return normalizeProductIdentity(result.identity, {
-        now: result.identity.capturedAt ?? evidence.capturedAt
-      });
+      try {
+        const evidence = normalizeScanEvidence(input, { now: input?.capturedAt });
+        const result = await post({ action: 'identify_product', evidence });
+        if (result.status !== 'identified' || !result.identity) throw safeFailure();
+        return normalizeProductIdentity(result.identity, {
+          now: result.identity.capturedAt ?? evidence.capturedAt
+        });
+      } catch {
+        throw safeFailure();
+      }
+    },
+    async searchOffers(input) {
+      try {
+        const identity = normalizeProductIdentity(input, { now: input?.capturedAt });
+        const result = await post({ action: 'search_offers', identity });
+        if (!Array.isArray(result.offers)) throw safeFailure();
+        return Object.freeze(result.offers.slice(0, 60).map(offer => normalizeOffer(offer)));
+      } catch {
+        throw safeFailure();
+      }
     }
   });
 }
