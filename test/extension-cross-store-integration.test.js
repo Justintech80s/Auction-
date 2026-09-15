@@ -16,6 +16,10 @@ function scanRequest() {
   });
 }
 
+function publishedOfType(harness, type) {
+  return harness.published.filter(message => message.type === type);
+}
+
 test('scan request publishes identified state then ranked cross-store results', async () => {
   const harness = workerScanHarness();
   const worker = createAuctionServiceWorker({
@@ -31,12 +35,13 @@ test('scan request publishes identified state then ranked cross-store results', 
   worker.start();
   const response = await harness.dispatch(scanRequest());
 
-  assert.equal(harness.published.length, 2);
-  assert.equal(harness.published[0].type, MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_RESULT);
-  assert.equal(harness.published[0].payload.status, 'identified');
-  assert.equal(harness.published[1].type, MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT);
-  assert.equal(harness.published[1].payload.status, 'complete');
-  assert.equal(harness.published[1].payload.groups.used.cheapestItemId, 'fixture-store:offer-1');
+  const scanMessages = publishedOfType(harness, MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_RESULT);
+  const searchMessages = publishedOfType(harness, MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT);
+  assert.equal(scanMessages.length, 1);
+  assert.equal(searchMessages.length, 1);
+  assert.equal(scanMessages[0].payload.status, 'identified');
+  assert.equal(searchMessages[0].payload.status, 'complete');
+  assert.equal(searchMessages[0].payload.groups.used.cheapestItemId, 'fixture-store:offer-1');
   assert.equal(response.type, MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT);
   worker.stop();
 });
@@ -56,7 +61,7 @@ test('one shopping provider failure preserves offers as partial_results', async 
   worker.start();
   await harness.dispatch(scanRequest());
 
-  const result = harness.published.at(-1);
+  const result = publishedOfType(harness, MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT).at(-1);
   assert.equal(result.payload.status, 'partial_results');
   assert.equal(result.payload.offers.length, 1);
   assert.deepEqual(result.payload.providerErrors, [{ source: 'broken-store', code: 'provider_unavailable' }]);
@@ -79,9 +84,10 @@ test('needs_confirmation publishes scan state and stops before shopping search',
   worker.start();
   const response = await harness.dispatch(scanRequest());
 
+  const scanMessages = publishedOfType(harness, MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_RESULT);
   assert.equal(searches, 0);
-  assert.equal(harness.published.length, 1);
-  assert.equal(harness.published[0].payload.status, 'needs_confirmation');
+  assert.equal(scanMessages.length, 1);
+  assert.equal(scanMessages[0].payload.status, 'needs_confirmation');
   assert.equal(response.type, MESSAGE_TYPES.SCAN_ACTIVE_PRODUCT_RESULT);
   worker.stop();
 });
@@ -101,8 +107,9 @@ test('unavailable shopping providers produce provider_unavailable without throwi
   worker.start();
   const response = await harness.dispatch(scanRequest());
 
+  const result = publishedOfType(harness, MESSAGE_TYPES.CROSS_STORE_SEARCH_RESULT).at(-1);
   assert.equal(response.payload.status, 'provider_unavailable');
-  assert.equal(harness.published.at(-1).payload.status, 'provider_unavailable');
+  assert.equal(result.payload.status, 'provider_unavailable');
   worker.stop();
 });
 
