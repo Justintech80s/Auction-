@@ -12,6 +12,7 @@ const STATES = new Set([
   'provider_unavailable',
   'error'
 ]);
+const FORBIDDEN_KEYS = /^(?:raw_?html|html|cookie|cookies|authorization|password|credential|credentials|checkout|payment|card|token)$/i;
 
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -23,8 +24,22 @@ function cleanString(value, max = 512) {
   return text ? text.slice(0, max) : null;
 }
 
+function assertNoForbiddenFields(value, depth = 0) {
+  if (value == null || typeof value !== 'object') return;
+  if (depth > 8) throw new TypeError('scan session nesting exceeds limit');
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoForbiddenFields(item, depth + 1);
+    return;
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    if (FORBIDDEN_KEYS.test(key)) throw new TypeError('forbidden scan session field');
+    assertNoForbiddenFields(entry, depth + 1);
+  }
+}
+
 function cleanSession(input = {}) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new TypeError('scan session must be an object');
+  assertNoForbiddenFields(input);
   const state = String(input.state || '').trim();
   if (!STATES.has(state)) throw new TypeError('unsupported scan session state');
 
@@ -34,14 +49,15 @@ function cleanSession(input = {}) {
   const sourceUrl = cleanString(input.sourceUrl, 2048);
   if (sourceUrl) {
     const parsed = new URL(sourceUrl);
-    if (parsed.protocol !== 'https:') throw new TypeError('sourceUrl must use https');
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password) throw new TypeError('sourceUrl must use safe https');
   }
 
   const updated = new Date(input.updatedAt ?? Date.now());
   if (!Number.isFinite(updated.getTime())) throw new TypeError('updatedAt must be valid');
 
   const result = input.result == null ? null : clone(input.result);
-  const serialized = JSON.stringify(result);
+  const identifiedProduct = input.identifiedProduct == null ? null : clone(input.identifiedProduct);
+  const serialized = JSON.stringify({ result, identifiedProduct });
   if (serialized.length > 64 * 1024) throw new RangeError('scan result exceeds storage limit');
 
   return Object.freeze({
@@ -49,7 +65,7 @@ function cleanSession(input = {}) {
     tabId,
     sourceUrl,
     state,
-    identifiedProduct: input.identifiedProduct == null ? null : clone(input.identifiedProduct),
+    identifiedProduct,
     result,
     errorCode: cleanString(input.errorCode, 64),
     updatedAt: updated.toISOString()
