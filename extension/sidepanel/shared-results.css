@@ -1,16 +1,30 @@
+.shopping-results {
+  display: grid;
+  gap: 14px;
+}
+
+.shopping-results[hidden] {
+  display: none;
+}
+
 .shared-product-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
 
 .shared-product-image {
-  width: 84px;
-  height: 84px;
+  width: 100%;
+  max-height: 220px;
   border-radius: 14px;
   object-fit: contain;
   background: color-mix(in srgb, Canvas 94%, CanvasText 6%);
+}
+
+.shared-product-card h2 {
+  margin: 4px 0 0;
+  font-size: 1.25rem;
+  line-height: 1.25;
 }
 
 .feature-list {
@@ -28,6 +42,10 @@
   background: color-mix(in srgb, Canvas 88%, CanvasText 12%);
 }
 
+.shared-lowest-card {
+  border-width: 2px;
+}
+
 .lowest-price-row,
 .offer-heading-row {
   display: flex;
@@ -37,13 +55,16 @@
 }
 
 .lowest-price {
-  font-size: 1.9rem;
+  font-size: 2rem;
   line-height: 1;
 }
 
 .shared-offer-card {
   display: grid;
   gap: 8px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, CanvasText 16%, transparent);
+  border-radius: 14px;
 }
 
 .offer-title {
@@ -55,7 +76,7 @@
   margin: 10px 0 0;
   padding-left: 20px;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 #shared-lowest-link,
@@ -63,4 +84,44 @@
   display: inline-flex;
   width: fit-content;
   margin-top: 4px;
+}
+
+.resale-tools {
+  margin-top: 16px;
+  border: 1px solid color-mix(in srgb, CanvasText 18%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
+  background: color-mix(in srgb, Canvas 96%, CanvasText 4%);
+}
+
+.resale-tools > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 14px 16px;
+  font-weight: 750;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.resale-tools > summary::-webkit-details-marker {
+  display: none;
+}
+
+.resale-tools > summary::after {
+  content: '+';
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.resale-tools[open] > summary::after {
+  content: '−';
+}
+
+.resale-tools-body {
+  padding: 0 12px 12px;
+}
+
+.resale-tools-intro {
+  margin: 0 4px 12px;
 }
