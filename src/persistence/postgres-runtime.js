@@ -35,7 +35,5 @@ export async function createPostgresCatalogFromEnv({
     allowExitOnIdle: true
   });
 
-  return createPostgresCatalog({
-    query: (text, params) => pool.query(text, params)
-  });
+  return createPostgresCatalog({ pool });
 }
