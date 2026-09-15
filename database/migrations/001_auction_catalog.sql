@@ -81,6 +81,9 @@ create index price_history_offer_observed_idx
 create index price_history_store_product_observed_idx
   on auction.price_history (store_id, product_id, observed_at desc);
 
-revoke all on schema auction from anon, authenticated;
-revoke all on all tables in schema auction from anon, authenticated;
-revoke all on all sequences in schema auction from anon, authenticated;
+revoke all on schema auction from anon;
+revoke all on schema auction from authenticated;
+revoke all on all tables in schema auction from anon;
+revoke all on all tables in schema auction from authenticated;
+revoke all on all sequences in schema auction from anon;
+revoke all on all sequences in schema auction from authenticated;
