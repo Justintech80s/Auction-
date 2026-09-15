@@ -70,6 +70,20 @@ function sessionStateForSharedStatus(status) {
   return 'error';
 }
 
+function createLazySharedBackend(storageArea) {
+  if (!storageArea) return null;
+
+  return Object.freeze({
+    async scanProduct(evidence) {
+      const configStore = createSharedBackendConfigStore(storageArea);
+      const endpoint = await configStore.get();
+      if (!endpoint) throw new Error('shared backend unavailable');
+      const backend = createProductSearchBackend({ endpoint });
+      return backend.scanProduct(evidence);
+    }
+  });
+}
+
 export function createAuctionAnalysisHandler({
   valueItemImpl = valueItem,
   pipelineOptions = {}
@@ -391,30 +405,23 @@ export function createAuctionServiceWorker({
   });
 }
 
-const chromeRuntime = globalThis.chrome?.runtime;
-if (chromeRuntime?.onMessage?.addListener && chromeRuntime?.onMessage?.removeListener) {
-  const sessionArea = globalThis.chrome?.storage?.session;
+export function startChromeAuctionServiceWorker({ chromeLike = globalThis.chrome } = {}) {
+  const chromeRuntime = chromeLike?.runtime;
+  if (!chromeRuntime?.onMessage?.addListener || !chromeRuntime?.onMessage?.removeListener) return null;
+
+  const sessionArea = chromeLike?.storage?.session;
   const sessionStore = sessionArea
     ? createScanSessionStore(sessionArea)
     : createMemoryScanSessionStore();
-  const localArea = globalThis.chrome?.storage?.local;
+  const sharedBackend = createLazySharedBackend(chromeLike?.storage?.local);
 
-  void (async () => {
-    let sharedBackend = null;
-    if (localArea) {
-      try {
-        const configStore = createSharedBackendConfigStore(localArea);
-        const endpoint = await configStore.get();
-        if (endpoint) sharedBackend = createProductSearchBackend({ endpoint });
-      } catch {
-        sharedBackend = null;
-      }
-    }
-
-    createAuctionServiceWorker({
-      runtime: chromeRuntime,
-      scanSessionStore: sessionStore,
-      sharedBackend
-    }).start();
-  })();
+  const worker = createAuctionServiceWorker({
+    runtime: chromeRuntime,
+    scanSessionStore: sessionStore,
+    sharedBackend
+  });
+  worker.start();
+  return worker;
 }
+
+startChromeAuctionServiceWorker();
