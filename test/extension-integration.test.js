@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 
 import {
   createAuctionAnalysisHandler,
-  createAuctionServiceWorker
+  createAuctionServiceWorker,
+  startChromeAuctionServiceWorker
 } from '../extension/service-worker.js';
 import {
   MESSAGE_TYPES,
@@ -167,6 +168,37 @@ test('service worker rejects malformed browser products without calling Auction'
   assert.equal(response.type, MESSAGE_TYPES.ANALYSIS_ERROR);
   assert.equal(response.payload.code, 'INVALID_MESSAGE');
   assert.equal(calls, 0);
+});
+
+test('MV3 bootstrap registers runtime listener synchronously before storage resolves', async () => {
+  const runtime = fakeRuntime();
+  let releaseStorage;
+  const storageGate = new Promise((resolve) => { releaseStorage = resolve; });
+  const chromeLike = {
+    runtime,
+    storage: {
+      session: {
+        async get() { return {}; },
+        async set() {},
+        async remove() {}
+      },
+      local: {
+        async get() {
+          await storageGate;
+          return {};
+        },
+        async set() {},
+        async remove() {}
+      }
+    }
+  };
+
+  const worker = startChromeAuctionServiceWorker({ chromeLike });
+
+  assert.ok(worker);
+  assert.equal(runtime.hasListener(), true);
+  releaseStorage();
+  worker.stop();
 });
 
 test('manifest v3 exposes explicit scan permissions without broad host access', async () => {
