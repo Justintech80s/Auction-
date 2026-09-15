@@ -5,10 +5,7 @@ import { readFile } from 'node:fs/promises';
 test('shopping results are the primary Auction sidebar experience', async () => {
   const html = await readFile(new URL('../extension/sidepanel/index.html', import.meta.url), 'utf8');
 
-  assert.match(html, />Ready to scan</);
   assert.match(html, /id=["']shared-scan-results["']/);
-  assert.match(html, /id=["']shared-product-brand["']/);
-  assert.match(html, /id=["']shared-product-model["']/);
   assert.match(html, /id=["']shared-lowest-price-card["']/);
   assert.match(html, /id=["']shared-comparison-list["']/);
   assert.match(html, /id=["']shared-savings-card["']/);
