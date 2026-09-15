@@ -146,32 +146,55 @@ async function resolveOffer(query, productId, storeId, offer) {
   return firstId(result);
 }
 
-export function createPostgresCatalog({ query } = {}) {
-  if (typeof query !== 'function') throw new TypeError('query_required');
+async function persistWithQuery(query, records) {
+  const productId = await resolveProduct(query, records.product);
+  const storeId = await resolveStore(query, records.store);
+  const offerId = await resolveOffer(query, productId, storeId, records.offer);
+
+  await query(
+    `insert into auction.price_history
+      (offer_id, product_id, store_id, item_price, shipping_price, currency, observed_at)
+     values ($1, $2, $3, $4, $5, $6, now())`,
+    [
+      offerId,
+      productId,
+      storeId,
+      records.history.itemPrice,
+      records.history.shippingPrice,
+      records.history.currency
+    ]
+  );
+
+  return { productId, storeId, offerId };
+}
+
+export function createPostgresCatalog({ query, pool } = {}) {
+  const hasQuery = typeof query === 'function';
+  const hasPool = Boolean(pool) && typeof pool.connect === 'function';
+  if (!hasQuery && !hasPool) throw new TypeError('query_required');
 
   return Object.freeze({
     async persistScanResult(records) {
       if (!validRecords(records)) throw new Error('invalid_catalog_records');
 
-      const productId = await resolveProduct(query, records.product);
-      const storeId = await resolveStore(query, records.store);
-      const offerId = await resolveOffer(query, productId, storeId, records.offer);
+      if (!hasPool) return persistWithQuery(query, records);
 
-      await query(
-        `insert into auction.price_history
-          (offer_id, product_id, store_id, item_price, shipping_price, currency, observed_at)
-         values ($1, $2, $3, $4, $5, $6, now())`,
-        [
-          offerId,
-          productId,
-          storeId,
-          records.history.itemPrice,
-          records.history.shippingPrice,
-          records.history.currency
-        ]
-      );
-
-      return { productId, storeId, offerId };
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const result = await persistWithQuery((text, params) => client.query(text, params), records);
+        await client.query('COMMIT');
+        return result;
+      } catch (error) {
+        try {
+          await client.query('ROLLBACK');
+        } catch {
+          // Preserve the original persistence error; rollback failure is operational only.
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
     }
   });
 }
