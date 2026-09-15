@@ -32,6 +32,16 @@ function cleanObject(input, maxEntries = 20) {
   ]));
 }
 
+function positiveMoney(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : null;
+}
+
+function cleanCurrency(value) {
+  const currency = cleanText(value, 3)?.toUpperCase();
+  return /^[A-Z]{3}$/.test(currency ?? '') ? currency : null;
+}
+
 function normalizeEvidence(input) {
   const evidence = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   return {
@@ -45,6 +55,8 @@ function normalizeEvidence(input) {
     identifiers: cleanObject(evidence.identifiers, 12),
     specs: cleanObject(evidence.specs, 20),
     imageUrl: httpsUrl(evidence.imageUrl),
+    observedPrice: positiveMoney(evidence.observedPrice),
+    observedCurrency: cleanCurrency(evidence.observedCurrency),
     confidence: Number.isFinite(Number(evidence.confidence))
       ? Math.max(0, Math.min(1, Number(evidence.confidence)))
       : 0
@@ -125,6 +137,31 @@ function lowestSharedOffer(offers) {
   };
 }
 
+function pagePrice(evidence) {
+  if (!evidence.observedPrice || !evidence.observedCurrency) return null;
+  return { amount: evidence.observedPrice, currency: evidence.observedCurrency };
+}
+
+function savingsFrom(page, lowest) {
+  if (!page || !lowest || page.currency !== lowest.currency) return null;
+  const bestTotal = Number(lowest.estimatedTotal ?? lowest.amount);
+  if (!Number.isFinite(bestTotal)) return null;
+  const amount = Math.round((page.amount - bestTotal) * 100) / 100;
+  return amount > 0 ? { amount, currency: page.currency } : null;
+}
+
+function savingsMessage(savings, lowest) {
+  if (!savings || !lowest) return null;
+  try {
+    const formatted = new Intl.NumberFormat('en-US', {
+      style: 'currency', currency: savings.currency, minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(savings.amount);
+    return `You can save ${formatted} versus this page with the lowest verified delivered offer from ${lowest.store}.`;
+  } catch {
+    return null;
+  }
+}
+
 function configuredProviders(env = process.env) {
   const clientId = String(env?.EBAY_CLIENT_ID ?? '').trim();
   const clientSecret = String(env?.EBAY_CLIENT_SECRET ?? '').trim();
@@ -144,13 +181,8 @@ async function persistSafeExactOffers(catalog, evidence, product, offers) {
   if (!catalog || typeof catalog.persistScanResult !== 'function') return;
 
   for (const offer of offers) {
-    const records = toCatalogRecords({
-      evidence,
-      identifiedProduct: product,
-      offer
-    });
+    const records = toCatalogRecords({ evidence, identifiedProduct: product, offer });
     if (!records) continue;
-
     try {
       await catalog.persistScanResult(records);
     } catch {
@@ -166,37 +198,15 @@ export async function handleProductScan(payload, { providers = [], catalog = nul
 
   const evidence = normalizeEvidence(payload.evidence);
   const product = identifiedProduct(evidence);
+  const currentPagePrice = pagePrice(evidence);
 
   if (!product) {
-    return {
-      statusCode: 200,
-      body: {
-        status: 'needs_confirmation',
-        identifiedProduct: null,
-        lowestPrice: null,
-        priceComparison: [],
-        savingsTips: ['Open a clear product page with a visible title or model and scan again.'],
-        providerErrors: []
-      }
-    };
+    return { statusCode: 200, body: { status: 'needs_confirmation', identifiedProduct: null, currentPagePrice, lowestPrice: null, savings: null, priceComparison: [], savingsTips: ['Open a clear product page with a visible title or model and scan again.'], providerErrors: [] } };
   }
 
   const identity = identityFromEvidence(evidence);
   if (!identity || !Array.isArray(providers) || providers.length === 0) {
-    return {
-      statusCode: 200,
-      body: {
-        status: 'provider_unavailable',
-        identifiedProduct: product,
-        lowestPrice: null,
-        priceComparison: [],
-        savingsTips: [
-          'Live store pricing is not connected yet.',
-          'Compare delivered totals, condition, and return policy before buying.'
-        ],
-        providerErrors: [{ source: 'shopping', code: 'provider_unavailable' }]
-      }
-    };
+    return { statusCode: 200, body: { status: 'provider_unavailable', identifiedProduct: product, currentPagePrice, lowestPrice: null, savings: null, priceComparison: [], savingsTips: ['Live store pricing is not connected yet.', 'Compare delivered totals, condition, and return policy before buying.'], providerErrors: [{ source: 'shopping', code: 'provider_unavailable' }] } };
   }
 
   let searched;
@@ -213,13 +223,14 @@ export async function handleProductScan(payload, { providers = [], catalog = nul
     ranked = { offers: [] };
   }
 
-  const safeExact = (ranked.offers ?? []).filter(offer =>
-    offer.matchClassification === 'exact' && offer.guardianDecision === 'allow'
-  );
+  const safeExact = (ranked.offers ?? []).filter(offer => offer.matchClassification === 'exact' && offer.guardianDecision === 'allow');
   await persistSafeExactOffers(catalog, evidence, product, safeExact);
 
   const comparison = safeExact.map(sharedOffer);
   const errors = Array.isArray(searched.providerErrors) ? searched.providerErrors : [];
+  const lowestPrice = lowestSharedOffer(safeExact);
+  const savings = savingsFrom(currentPagePrice, lowestPrice);
+  const saveTip = savingsMessage(savings, lowestPrice);
 
   let status = 'no_results';
   if (safeExact.length > 0) status = errors.length > 0 ? 'partial_results' : 'complete';
@@ -230,10 +241,12 @@ export async function handleProductScan(payload, { providers = [], catalog = nul
     body: {
       status,
       identifiedProduct: product,
-      lowestPrice: lowestSharedOffer(safeExact),
+      currentPagePrice,
+      lowestPrice,
+      savings,
       priceComparison: comparison,
       savingsTips: safeExact.length > 0
-        ? ['Compare delivered totals, condition, seller terms, and return policy before buying.']
+        ? [saveTip, 'Compare delivered totals, condition, seller terms, and return policy before buying.'].filter(Boolean)
         : ['No safe exact match was found. Try a product page with a clearer model or identifier.'],
       providerErrors: errors
     }
@@ -241,11 +254,7 @@ export async function handleProductScan(payload, { providers = [], catalog = nul
 }
 
 function setCors(res, origin) {
-  const allowed = typeof origin === 'string' && (
-    origin.startsWith('chrome-extension://') ||
-    origin.startsWith('moz-extension://') ||
-    origin.startsWith('https://')
-  );
+  const allowed = typeof origin === 'string' && (origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://') || origin.startsWith('https://'));
   if (allowed) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -255,23 +264,15 @@ function setCors(res, origin) {
 
 export default async function handler(req, res) {
   setCors(res, req.headers?.origin);
-
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ status: 'error' });
 
   let payload = req.body;
   if (typeof payload === 'string') {
-    try {
-      payload = JSON.parse(payload);
-    } catch {
-      return res.status(400).json({ status: 'error' });
-    }
+    try { payload = JSON.parse(payload); } catch { return res.status(400).json({ status: 'error' }); }
   }
 
   const catalog = await configuredCatalog();
-  const result = await handleProductScan(payload, {
-    providers: configuredProviders(),
-    catalog
-  });
+  const result = await handleProductScan(payload, { providers: configuredProviders(), catalog });
   return res.status(result.statusCode).json(result.body);
 }
