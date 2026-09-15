@@ -1,139 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import {
-  buildPanelState,
-  formatMoney,
-  formatPercent,
-  readCostInputs
-} from '../extension/sidepanel/app.js';
+import { buildPanelState, formatMoney, formatPercent, readCostInputs } from '../extension/sidepanel/app.js';
+import { buildPriceHistoryViewModel } from '../extension/sidepanel/price-history.js';
 
-test('builds the supported side panel states', () => {
-  for (const state of ['idle', 'scanning', 'analyzing', 'unsupported', 'error']) {
-    const panel = buildPanelState(state);
-    assert.equal(panel.state, state);
-    assert.equal(typeof panel.title, 'string');
-    assert.ok(panel.title.length > 0);
-  }
-});
+test('builds the supported side panel states', () => { for (const state of ['idle','scanning','analyzing','unsupported','error']) { const panel=buildPanelState(state); assert.equal(panel.state,state); assert.equal(typeof panel.title,'string'); assert.ok(panel.title.length>0); } });
 
-test('builds a result state from the Auction view model without changing its decision', () => {
-  const panel = buildPanelState('result', {
-    productTitle: 'Sony WM-2 Walkman',
-    currentPrice: 129.99,
-    currency: 'USD',
-    estimatedValue: 220,
-    valueRange: { low: 195, high: 245 },
-    verifiedSoldCount: 6,
-    potentialProfit: 90.01,
-    totalCosts: 35,
-    netProfit: 55.01,
-    netMarginPct: 25,
-    costsApplied: true,
-    confidence: 0.84,
-    decision: 'buy',
-    decisionReason: 'Auction returned buy.',
-    riskState: 'allow',
-    soldEvidenceState: 'ok'
-  });
+test('builds a result state from the Auction view model without changing its decision', () => { const panel=buildPanelState('result',{productTitle:'Sony WM-2 Walkman',currentPrice:129.99,currency:'USD',estimatedValue:220,valueRange:{low:195,high:245},verifiedSoldCount:6,potentialProfit:90.01,totalCosts:35,netProfit:55.01,netMarginPct:25,costsApplied:true,confidence:0.84,decision:'buy',decisionReason:'Auction returned buy.',riskState:'allow',soldEvidenceState:'ok'}); assert.equal(panel.state,'result'); assert.equal(panel.decision,'buy'); assert.equal(panel.productTitle,'Sony WM-2 Walkman'); assert.equal(panel.currentPrice,'$129.99'); assert.equal(panel.estimatedValue,'$220.00'); assert.equal(panel.valueRange,'$195.00 – $245.00'); assert.equal(panel.potentialProfit,'$90.01'); assert.equal(panel.totalCosts,'$35.00'); assert.equal(panel.netProfit,'$55.01'); assert.equal(panel.netMarginPct,'25.00%'); assert.equal(panel.costsApplied,true); assert.equal(panel.confidence,'84%'); assert.equal(panel.verifiedSoldCount,'6'); assert.equal(panel.riskState,'allow'); assert.equal(panel.soldEvidenceState,'ok'); });
 
-  assert.equal(panel.state, 'result');
-  assert.equal(panel.decision, 'buy');
-  assert.equal(panel.productTitle, 'Sony WM-2 Walkman');
-  assert.equal(panel.currentPrice, '$129.99');
-  assert.equal(panel.estimatedValue, '$220.00');
-  assert.equal(panel.valueRange, '$195.00 – $245.00');
-  assert.equal(panel.potentialProfit, '$90.01');
-  assert.equal(panel.totalCosts, '$35.00');
-  assert.equal(panel.netProfit, '$55.01');
-  assert.equal(panel.netMarginPct, '25.00%');
-  assert.equal(panel.costsApplied, true);
-  assert.equal(panel.confidence, '84%');
-  assert.equal(panel.verifiedSoldCount, '6');
-  assert.equal(panel.riskState, 'allow');
-  assert.equal(panel.soldEvidenceState, 'ok');
-});
+test('builds a conservative price history view model from the backend contract', () => { const history=buildPriceHistoryViewModel({observations:4,low:99.5,high:149.99,average:124.25,points:[{observed_at:'2026-09-01T00:00:00Z',price:149.99,currency:'USD'},{observed_at:'2026-09-15T00:00:00Z',price:129.99,currency:'USD'}]}); assert.equal(history.visible,true); assert.equal(history.currentPrice,'$129.99'); assert.equal(history.low,'$99.50'); assert.equal(history.high,'$149.99'); assert.equal(history.average,'$124.25'); assert.equal(history.observations,'4'); assert.equal(history.points.length,2); });
 
-test('reads only explicit non-negative cost inputs and returns undefined when all are blank', () => {
-  const values = new Map([
-    ['cost-marketplace-fee', '12.50'],
-    ['cost-shipping', '8'],
-    ['cost-tax', ''],
-    ['cost-repairs', '0'],
-    ['cost-payment-processing', '2.25'],
-    ['cost-holding', ' ']
-  ]);
-  const documentLike = {
-    getElementById(id) { return { value: values.get(id) ?? '' }; }
-  };
+test('reads only explicit non-negative cost inputs and returns undefined when all are blank',()=>{ const values=new Map([['cost-marketplace-fee','12.50'],['cost-shipping','8'],['cost-tax',''],['cost-repairs','0'],['cost-payment-processing','2.25'],['cost-holding',' ']]); const documentLike={getElementById(id){return {value:values.get(id)??''};}}; assert.deepEqual(readCostInputs(documentLike),{marketplaceFee:12.5,shipping:8,repairs:0,paymentProcessing:2.25}); const blankDocument={getElementById(){return {value:''};}}; assert.equal(readCostInputs(blankDocument),undefined); });
 
-  assert.deepEqual(readCostInputs(documentLike), {
-    marketplaceFee: 12.5,
-    shipping: 8,
-    repairs: 0,
-    paymentProcessing: 2.25
-  });
+test('rejects invalid side panel cost values before analysis',()=>{ const documentLike={getElementById(id){return {value:id==='cost-shipping'?'-1':''};}}; assert.throws(()=>readCostInputs(documentLike),/shipping/i); });
 
-  const blankDocument = {
-    getElementById() { return { value: '' }; }
-  };
-  assert.equal(readCostInputs(blankDocument), undefined);
-});
+test('side panel markup exposes economics and price history outputs',async()=>{ const html=await readFile(new URL('../extension/sidepanel/index.html',import.meta.url),'utf8'); for(const id of ['cost-marketplace-fee','cost-shipping','cost-tax','cost-repairs','cost-payment-processing','cost-holding','total-costs','net-profit','net-margin','price-history','history-current-price','history-low','history-high','history-average','history-observations','history-chart']) assert.match(html,new RegExp(`id=["']${id}["']`)); });
 
-test('rejects invalid side panel cost values before analysis', () => {
-  const documentLike = {
-    getElementById(id) {
-      return { value: id === 'cost-shipping' ? '-1' : '' };
-    }
-  };
-  assert.throws(() => readCostInputs(documentLike), /shipping/i);
-});
-
-test('side panel markup exposes all six optional cost fields and net economics outputs', async () => {
-  const html = await readFile(new URL('../extension/sidepanel/index.html', import.meta.url), 'utf8');
-  for (const id of [
-    'cost-marketplace-fee',
-    'cost-shipping',
-    'cost-tax',
-    'cost-repairs',
-    'cost-payment-processing',
-    'cost-holding',
-    'total-costs',
-    'net-profit',
-    'net-margin'
-  ]) {
-    assert.match(html, new RegExp(`id=["']${id}["']`));
-  }
-});
-
-test('formats missing values conservatively', () => {
-  assert.equal(formatMoney(null, 'USD'), '—');
-  assert.equal(formatPercent(null), '—');
-
-  const panel = buildPanelState('result', {
-    productTitle: 'Unknown value item',
-    currentPrice: null,
-    estimatedValue: null,
-    valueRange: null,
-    verifiedSoldCount: 0,
-    potentialProfit: null,
-    totalCosts: null,
-    netProfit: null,
-    netMarginPct: null,
-    costsApplied: false,
-    confidence: 0,
-    decision: 'manual_review',
-    decisionReason: null,
-    riskState: 'review',
-    soldEvidenceState: 'unavailable',
-    currency: 'USD'
-  });
-
-  assert.equal(panel.currentPrice, '—');
-  assert.equal(panel.estimatedValue, '—');
-  assert.equal(panel.potentialProfit, '—');
-  assert.equal(panel.totalCosts, '—');
-  assert.equal(panel.netProfit, '—');
-  assert.equal(panel.netMarginPct, '—');
-  assert.equal(panel.decision, 'manual_review');
-});
+test('formats missing values conservatively',()=>{ assert.equal(formatMoney(null,'USD'),'—'); assert.equal(formatPercent(null),'—'); const panel=buildPanelState('result',{productTitle:'Unknown value item',currentPrice:null,estimatedValue:null,valueRange:null,verifiedSoldCount:0,potentialProfit:null,totalCosts:null,netProfit:null,netMarginPct:null,costsApplied:false,confidence:0,decision:'manual_review',decisionReason:null,riskState:'review',soldEvidenceState:'unavailable',currency:'USD'}); assert.equal(panel.currentPrice,'—'); assert.equal(panel.estimatedValue,'—'); assert.equal(panel.potentialProfit,'—'); assert.equal(panel.totalCosts,'—'); assert.equal(panel.netProfit,'—'); assert.equal(panel.netMarginPct,'—'); assert.equal(panel.decision,'manual_review'); });
