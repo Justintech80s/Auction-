@@ -1,4 +1,5 @@
 import { valueItem } from '../src/pipeline.js';
+import { createProductSearchBackend } from '../src/connectors/product-search-backend.js';
 import { identifyProduct } from '../src/product-search/identify.js';
 import { rankOffers } from '../src/product-search/ranker.js';
 import { searchAcrossStores } from '../src/product-search/search.js';
@@ -15,6 +16,7 @@ import {
   createMemoryScanSessionStore,
   createScanSessionStore
 } from './storage/scan-session.js';
+import { createSharedBackendConfigStore } from './storage/shared-backend-config.js';
 
 export const SCAN_SESSION_REQUEST = 'AUCTION_SCAN_SESSION_REQUEST';
 export const SCAN_SESSION_STATE = 'AUCTION_SCAN_SESSION_STATE';
@@ -395,5 +397,24 @@ if (chromeRuntime?.onMessage?.addListener && chromeRuntime?.onMessage?.removeLis
   const sessionStore = sessionArea
     ? createScanSessionStore(sessionArea)
     : createMemoryScanSessionStore();
-  createAuctionServiceWorker({ runtime: chromeRuntime, scanSessionStore: sessionStore }).start();
+  const localArea = globalThis.chrome?.storage?.local;
+
+  void (async () => {
+    let sharedBackend = null;
+    if (localArea) {
+      try {
+        const configStore = createSharedBackendConfigStore(localArea);
+        const endpoint = await configStore.get();
+        if (endpoint) sharedBackend = createProductSearchBackend({ endpoint });
+      } catch {
+        sharedBackend = null;
+      }
+    }
+
+    createAuctionServiceWorker({
+      runtime: chromeRuntime,
+      scanSessionStore: sessionStore,
+      sharedBackend
+    }).start();
+  })();
 }

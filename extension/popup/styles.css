@@ -7,7 +7,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 280px; background: #0b0d12; }
-button { font: inherit; }
+button, input { font: inherit; }
 .popup-shell { padding: 16px; display: grid; gap: 10px; }
 .popup-brand { padding-bottom: 4px; }
 .eyebrow { margin: 0 0 4px; color: #9da8bc; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
@@ -17,6 +17,12 @@ h1 { margin: 0; font-size: 18px; line-height: 1.2; }
 }
 .primary-action { border: 1px solid #789cff; background: #5b7ee5; color: #fff; }
 .secondary-action { border: 1px solid #354158; background: #171d28; color: #e9eef7; }
-.primary-action:focus-visible, .secondary-action:focus-visible { outline: 3px solid #8dafff; outline-offset: 2px; }
+.primary-action:focus-visible, .secondary-action:focus-visible, input:focus-visible { outline: 3px solid #8dafff; outline-offset: 2px; }
 .primary-action:disabled, .secondary-action:disabled { cursor: wait; opacity: .65; }
+.backend-settings { border: 1px solid #273247; border-radius: 11px; padding: 10px; background: #111722; }
+.backend-settings summary { cursor: pointer; font-size: 12px; font-weight: 750; color: #dfe6f1; }
+.backend-settings label { display: block; margin: 10px 0 5px; color: #aeb8c8; font-size: 11px; }
+.backend-settings input { width: 100%; border: 1px solid #354158; border-radius: 9px; background: #0b1018; color: #f5f7fb; padding: 9px 10px; font-size: 11px; }
+.compact-action { min-height: 36px; margin-top: 8px; padding: 7px 10px; font-size: 12px; }
+.setting-help { margin: 8px 0 0; color: #8995a8; font-size: 10px; line-height: 1.4; }
 .status { min-height: 18px; margin: 2px 0 0; color: #aeb8c8; font-size: 12px; line-height: 1.4; }
