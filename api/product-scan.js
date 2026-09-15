@@ -2,9 +2,11 @@ import { searchAcrossStores } from '../src/product-search/search.js';
 import { rankOffers } from '../src/product-search/ranker.js';
 import { createEbayBrowseProvider } from '../src/product-search/providers/ebay-browse.js';
 import { toCatalogRecords } from '../src/persistence/catalog-records.js';
+import { createPostgresCatalogFromEnv } from '../src/persistence/postgres-runtime.js';
 
 const MAX_TEXT = 240;
 const MAX_FEATURES = 12;
+let catalogPromise = null;
 
 function cleanText(value, max = MAX_TEXT) {
   if (typeof value !== 'string') return null;
@@ -128,6 +130,14 @@ function configuredProviders(env = process.env) {
   const clientSecret = String(env?.EBAY_CLIENT_SECRET ?? '').trim();
   if (!clientId || !clientSecret) return [];
   return [createEbayBrowseProvider({ clientId, clientSecret })];
+}
+
+async function configuredCatalog(env = process.env) {
+  if (!String(env?.AUCTION_DATABASE_URL ?? '').trim()) return null;
+  if (!catalogPromise) {
+    catalogPromise = createPostgresCatalogFromEnv({ env }).catch(() => null);
+  }
+  return catalogPromise;
 }
 
 async function persistSafeExactOffers(catalog, evidence, product, offers) {
@@ -258,6 +268,10 @@ export default async function handler(req, res) {
     }
   }
 
-  const result = await handleProductScan(payload, { providers: configuredProviders() });
+  const catalog = await configuredCatalog();
+  const result = await handleProductScan(payload, {
+    providers: configuredProviders(),
+    catalog
+  });
   return res.status(result.statusCode).json(result.body);
 }
