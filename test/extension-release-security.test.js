@@ -12,7 +12,8 @@ const EXPECTED_HOSTS = [
   'https://www.ebay.com/*',
   'https://www.amazon.com/*',
   'https://www.walmart.com/*',
-  'https://www.bestbuy.com/*'
+  'https://www.bestbuy.com/*',
+  'https://auction-jays-list.vercel.app/*'
 ];
 
 async function collectFiles(root) {
