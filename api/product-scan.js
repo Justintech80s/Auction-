@@ -1,3 +1,7 @@
+import { searchAcrossStores } from '../src/product-search/search.js';
+import { rankOffers } from '../src/product-search/ranker.js';
+import { createEbayBrowseProvider } from '../src/product-search/providers/ebay-browse.js';
+
 const MAX_TEXT = 240;
 const MAX_FEATURES = 12;
 
@@ -64,7 +68,68 @@ function identifiedProduct(evidence) {
   };
 }
 
-export async function handleProductScan(payload) {
+function identityFromEvidence(evidence) {
+  if (!evidence.sourceUrl) return null;
+  const title = evidence.title || evidence.pageTitle;
+  if (!title) return null;
+  return {
+    title,
+    brand: evidence.brand,
+    model: evidence.model,
+    category: evidence.category,
+    condition: evidence.condition,
+    identifiers: evidence.identifiers,
+    specs: evidence.specs,
+    sourceUrl: evidence.sourceUrl,
+    imageUrl: evidence.imageUrl,
+    confidence: evidence.confidence,
+    capturedAt: new Date().toISOString()
+  };
+}
+
+function sharedOffer(offer) {
+  return {
+    store: offer.store,
+    title: offer.title,
+    price: offer.itemPrice,
+    currency: offer.currency,
+    shipping: offer.shipping,
+    estimatedTotal: offer.estimatedTotal,
+    condition: offer.condition,
+    description: null,
+    url: offer.url,
+    imageUrl: offer.imageUrl,
+    matchConfidence: offer.matchScore,
+    guardianDecision: offer.guardianDecision
+  };
+}
+
+function deliveredValue(offer) {
+  return offer.estimatedTotal ?? offer.itemPrice;
+}
+
+function lowestSharedOffer(offers) {
+  const lowest = [...offers].sort((a, b) => deliveredValue(a) - deliveredValue(b) || a.itemPrice - b.itemPrice)[0];
+  if (!lowest) return null;
+  return {
+    amount: lowest.itemPrice,
+    currency: lowest.currency,
+    store: lowest.store,
+    url: lowest.url,
+    shipping: lowest.shipping,
+    estimatedTotal: lowest.estimatedTotal,
+    condition: lowest.condition
+  };
+}
+
+function configuredProviders(env = process.env) {
+  const clientId = String(env?.EBAY_CLIENT_ID ?? '').trim();
+  const clientSecret = String(env?.EBAY_CLIENT_SECRET ?? '').trim();
+  if (!clientId || !clientSecret) return [];
+  return [createEbayBrowseProvider({ clientId, clientSecret })];
+}
+
+export async function handleProductScan(payload, { providers = [] } = {}) {
   if (!payload || payload.action !== 'product_scan') {
     return { statusCode: 400, body: { status: 'error' } };
   }
@@ -86,18 +151,59 @@ export async function handleProductScan(payload) {
     };
   }
 
+  const identity = identityFromEvidence(evidence);
+  if (!identity || !Array.isArray(providers) || providers.length === 0) {
+    return {
+      statusCode: 200,
+      body: {
+        status: 'provider_unavailable',
+        identifiedProduct: product,
+        lowestPrice: null,
+        priceComparison: [],
+        savingsTips: [
+          'Live store pricing is not connected yet.',
+          'Compare delivered totals, condition, and return policy before buying.'
+        ],
+        providerErrors: [{ source: 'shopping', code: 'provider_unavailable' }]
+      }
+    };
+  }
+
+  let searched;
+  try {
+    searched = await searchAcrossStores(identity, { providers, timeoutMs: 5000 });
+  } catch {
+    searched = { offers: [], providerErrors: [{ source: 'shopping', code: 'provider_unavailable' }] };
+  }
+
+  let ranked;
+  try {
+    ranked = rankOffers(identity, searched.offers);
+  } catch {
+    ranked = { offers: [] };
+  }
+
+  const safeExact = (ranked.offers ?? []).filter(offer =>
+    offer.matchClassification === 'exact' && offer.guardianDecision === 'allow'
+  );
+  const comparison = safeExact.map(sharedOffer);
+  const errors = Array.isArray(searched.providerErrors) ? searched.providerErrors : [];
+
+  let status = 'no_results';
+  if (safeExact.length > 0) status = errors.length > 0 ? 'partial_results' : 'complete';
+  else if ((searched.offers?.length ?? 0) === 0 && errors.length > 0) status = 'provider_unavailable';
+
   return {
     statusCode: 200,
     body: {
-      status: 'provider_unavailable',
+      status,
       identifiedProduct: product,
-      lowestPrice: null,
-      priceComparison: [],
-      savingsTips: [
-        'Live store pricing is not connected yet.',
-        'Compare delivered totals, condition, and return policy before buying.'
-      ],
-      providerErrors: [{ source: 'shopping', code: 'provider_unavailable' }]
+      lowestPrice: lowestSharedOffer(safeExact),
+      priceComparison: comparison,
+      savingsTips: safeExact.length > 0
+        ? ['Compare delivered totals, condition, seller terms, and return policy before buying.']
+        : ['No safe exact match was found. Try a product page with a clearer model or identifier.'],
+      providerErrors: errors
     }
   };
 }
@@ -130,6 +236,6 @@ export default async function handler(req, res) {
     }
   }
 
-  const result = await handleProductScan(payload);
+  const result = await handleProductScan(payload, { providers: configuredProviders() });
   return res.status(result.statusCode).json(result.body);
 }
