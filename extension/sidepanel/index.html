@@ -13,7 +13,7 @@
     <header class="panel-header"><div><p class="eyebrow">AUCTION</p><h1 id="panel-title">Ready to analyze</h1></div><span id="panel-state" class="state-pill">idle</span></header>
     <p id="panel-message" class="panel-message">Open a supported product page to begin.</p>
 
-    <section id="shared-scan-results" class="search-card" aria-labelledby="shared-product-heading" hidden>
+    <section id="shared-scan-results" class="search-card shopping-results" aria-labelledby="shared-product-heading" hidden>
       <section class="condition-card shared-product-card">
         <p class="label">Product Identified</p>
         <div class="shared-product-row">
@@ -26,7 +26,7 @@
         </div>
       </section>
 
-      <section id="shared-lowest-price-card" class="condition-card" hidden>
+      <section id="shared-lowest-price-card" class="condition-card shared-lowest-card" hidden>
         <p class="label">Lowest Price Found</p>
         <div class="lowest-price-row">
           <strong id="shared-lowest-price" class="lowest-price">—</strong>
@@ -73,40 +73,46 @@
       </div>
     </section>
 
-    <section class="cost-card" aria-labelledby="cost-heading">
-      <div><p class="label">Deal Costs</p><h2 id="cost-heading">Optional net-profit inputs</h2><p class="helper-text">Auction does not guess marketplace fees. Leave fields blank to keep gross-only analysis.</p></div>
-      <div class="preset-card" aria-labelledby="preset-heading">
-        <div><p class="label">Saved Presets</p><h2 id="preset-heading">Reuse your own cost setup</h2><p class="helper-text">Presets are saved locally in this browser. Set one as default to auto-fill these same explicit values whenever the panel opens.</p></div>
-        <label class="preset-field" for="cost-preset-name"><span>Preset name</span><input id="cost-preset-name" type="text" maxlength="48" autocomplete="off" placeholder="eBay resale"></label>
-        <label class="preset-field" for="cost-preset-select"><span>Saved preset</span><select id="cost-preset-select"><option value="">No saved presets</option></select></label>
-        <div class="preset-actions">
-          <button id="save-cost-preset" type="button" class="secondary-action">Save preset</button>
-          <button id="apply-cost-preset" type="button" class="secondary-action">Apply</button>
-          <button id="set-default-cost-preset" type="button" class="secondary-action">Set as Default</button>
-          <button id="clear-default-cost-preset" type="button" class="secondary-action">Clear Default</button>
-          <button id="delete-cost-preset" type="button" class="secondary-action danger-action">Delete</button>
-        </div>
-        <p id="cost-preset-status" class="preset-status" aria-live="polite"></p>
+    <details id="resale-analysis-tools" class="resale-tools">
+      <summary>Resale Analysis</summary>
+      <div class="resale-tools-body">
+        <p class="helper-text resale-tools-intro">Optional advanced valuation tools for resale costs, sold evidence, profit estimates, and Guardian review.</p>
+        <section class="cost-card" aria-labelledby="cost-heading">
+          <div><p class="label">Deal Costs</p><h2 id="cost-heading">Optional net-profit inputs</h2><p class="helper-text">Auction does not guess marketplace fees. Leave fields blank to keep gross-only analysis.</p></div>
+          <div class="preset-card" aria-labelledby="preset-heading">
+            <div><p class="label">Saved Presets</p><h2 id="preset-heading">Reuse your own cost setup</h2><p class="helper-text">Presets are saved locally in this browser. Set one as default to auto-fill these same explicit values whenever the panel opens.</p></div>
+            <label class="preset-field" for="cost-preset-name"><span>Preset name</span><input id="cost-preset-name" type="text" maxlength="48" autocomplete="off" placeholder="eBay resale"></label>
+            <label class="preset-field" for="cost-preset-select"><span>Saved preset</span><select id="cost-preset-select"><option value="">No saved presets</option></select></label>
+            <div class="preset-actions">
+              <button id="save-cost-preset" type="button" class="secondary-action">Save preset</button>
+              <button id="apply-cost-preset" type="button" class="secondary-action">Apply</button>
+              <button id="set-default-cost-preset" type="button" class="secondary-action">Set as Default</button>
+              <button id="clear-default-cost-preset" type="button" class="secondary-action">Clear Default</button>
+              <button id="delete-cost-preset" type="button" class="secondary-action danger-action">Delete</button>
+            </div>
+            <p id="cost-preset-status" class="preset-status" aria-live="polite"></p>
+          </div>
+          <div class="cost-grid">
+            <label class="cost-field" for="cost-marketplace-fee"><span>Marketplace fee</span><input id="cost-marketplace-fee" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+            <label class="cost-field" for="cost-shipping"><span>Shipping</span><input id="cost-shipping" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+            <label class="cost-field" for="cost-tax"><span>Tax</span><input id="cost-tax" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+            <label class="cost-field" for="cost-repairs"><span>Repairs</span><input id="cost-repairs" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+            <label class="cost-field" for="cost-payment-processing"><span>Payment processing</span><input id="cost-payment-processing" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+            <label class="cost-field" for="cost-holding"><span>Holding cost</span><input id="cost-holding" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
+          </div>
+        </section>
+        <section id="analysis-result" class="analysis-card" hidden>
+          <div class="product-block"><p class="label">Product</p><h2 id="product-title">—</h2></div>
+          <dl class="metrics-grid">
+            <div class="metric"><dt>Current Price</dt><dd id="current-price">—</dd></div><div class="metric"><dt>Estimated Value</dt><dd id="estimated-value">—</dd></div><div class="metric"><dt>Value Range</dt><dd id="value-range">—</dd></div><div class="metric"><dt>Gross Profit</dt><dd id="potential-profit">—</dd></div><div class="metric"><dt>Total Costs</dt><dd id="total-costs">—</dd></div><div class="metric"><dt>Net Profit</dt><dd id="net-profit">—</dd></div><div class="metric"><dt>Net Margin</dt><dd id="net-margin">—</dd></div><div class="metric"><dt>Confidence</dt><dd id="confidence">—</dd></div><div class="metric"><dt>Verified Sold</dt><dd id="verified-sold-count">0</dd></div>
+          </dl>
+          <section class="decision-card" aria-labelledby="decision-heading"><p id="decision-heading" class="label">Auction Decision</p><strong id="decision" class="decision">manual_review</strong></section>
+          <div class="evidence-row"><div><span class="label">Guardian</span><strong id="risk-state">unknown</strong></div><div><span class="label">Sold Evidence</span><strong id="sold-evidence-state">not_configured</strong></div></div>
+        </section>
+        <button id="save-item" type="button" class="primary-action" hidden>Save</button><button id="analyze-again" type="button" class="primary-action" hidden>Analyze Again</button>
+        <footer><p>Recommendations come from Auction's valuation, sold-evidence, Opportunity, and Guardian pipeline.</p></footer>
       </div>
-      <div class="cost-grid">
-        <label class="cost-field" for="cost-marketplace-fee"><span>Marketplace fee</span><input id="cost-marketplace-fee" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
-        <label class="cost-field" for="cost-shipping"><span>Shipping</span><input id="cost-shipping" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
-        <label class="cost-field" for="cost-tax"><span>Tax</span><input id="cost-tax" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
-        <label class="cost-field" for="cost-repairs"><span>Repairs</span><input id="cost-repairs" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
-        <label class="cost-field" for="cost-payment-processing"><span>Payment processing</span><input id="cost-payment-processing" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
-        <label class="cost-field" for="cost-holding"><span>Holding cost</span><input id="cost-holding" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></label>
-      </div>
-    </section>
-    <section id="analysis-result" class="analysis-card" hidden>
-      <div class="product-block"><p class="label">Product</p><h2 id="product-title">—</h2></div>
-      <dl class="metrics-grid">
-        <div class="metric"><dt>Current Price</dt><dd id="current-price">—</dd></div><div class="metric"><dt>Estimated Value</dt><dd id="estimated-value">—</dd></div><div class="metric"><dt>Value Range</dt><dd id="value-range">—</dd></div><div class="metric"><dt>Gross Profit</dt><dd id="potential-profit">—</dd></div><div class="metric"><dt>Total Costs</dt><dd id="total-costs">—</dd></div><div class="metric"><dt>Net Profit</dt><dd id="net-profit">—</dd></div><div class="metric"><dt>Net Margin</dt><dd id="net-margin">—</dd></div><div class="metric"><dt>Confidence</dt><dd id="confidence">—</dd></div><div class="metric"><dt>Verified Sold</dt><dd id="verified-sold-count">0</dd></div>
-      </dl>
-      <section class="decision-card" aria-labelledby="decision-heading"><p id="decision-heading" class="label">Auction Decision</p><strong id="decision" class="decision">manual_review</strong></section>
-      <div class="evidence-row"><div><span class="label">Guardian</span><strong id="risk-state">unknown</strong></div><div><span class="label">Sold Evidence</span><strong id="sold-evidence-state">not_configured</strong></div></div>
-    </section>
-    <button id="save-item" type="button" class="primary-action" hidden>Save</button><button id="analyze-again" type="button" class="primary-action" hidden>Analyze Again</button>
-    <footer><p>Recommendations come from Auction's valuation, sold-evidence, Opportunity, and Guardian pipeline.</p></footer>
+    </details>
   </main>
   <script type="module" src="./app.js"></script>
   <script type="module" src="./shared-session.js"></script>
