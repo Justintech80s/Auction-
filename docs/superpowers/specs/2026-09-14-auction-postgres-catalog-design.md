@@ -114,18 +114,20 @@ Indexes:
 - Only Guardian-approved exact offers may become the public-facing lowest-price candidate.
 
 ## Persistence behavior
-1. Upsert canonical product by barcode when available, otherwise by normalized brand/model/name identity.
+1. Upsert canonical product by barcode when available. Without a barcode, look up by normalized brand/model/name and insert when no match exists.
 2. Upsert store by normalized HTTPS website URL.
-3. Upsert current offer by provider + provider offer ID; if absent, use product/store/provider/purchase URL identity.
-4. Append a price-history row only after a validated offer is accepted.
-5. Keep unknown shipping as `NULL`; do not convert it to zero.
-6. Store timestamps in UTC using PostgreSQL `timestamptz`.
+3. Upsert current offer by provider + provider offer ID when the provider supplies an ID. If no provider offer ID exists, insert a new offer snapshot rather than guessing a durable external identity.
+4. Execute product, store, offer, and price-history writes in one PostgreSQL transaction in production so a failed history write rolls back the related upserts.
+5. Append a price-history row only after a validated offer is accepted.
+6. Keep unknown shipping as `NULL`; do not convert it to zero.
+7. Store timestamps in UTC using PostgreSQL `timestamptz`.
 
 ## Testing
 Repository tests should verify:
 - required tables, constraints, and indexes are present in migration SQL;
 - unsafe HTTP URLs and negative prices are rejected by schema constraints;
 - the adapter maps accepted provider offers to parameterized SQL inputs;
+- production persistence uses one transaction and rolls back on a history-write failure;
 - unknown shipping remains `NULL`;
 - rejected/mismatched offers are not persisted to price history;
 - no prohibited raw request fields are written.
