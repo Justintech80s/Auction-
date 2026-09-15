@@ -172,6 +172,12 @@ test('service worker rejects malformed browser products without calling Auction'
 test('manifest v3 exposes explicit scan permissions without broad host access', async () => {
   const raw = await readFile(new URL('../extension/manifest.json', import.meta.url), 'utf8');
   const manifest = JSON.parse(raw);
+  const shoppingHosts = [
+    'https://www.ebay.com/*',
+    'https://www.amazon.com/*',
+    'https://www.walmart.com/*',
+    'https://www.bestbuy.com/*'
+  ];
 
   assert.equal(manifest.manifest_version, 3);
   assert.deepEqual(manifest.permissions, ['sidePanel', 'storage', 'activeTab', 'scripting']);
@@ -180,9 +186,10 @@ test('manifest v3 exposes explicit scan permissions without broad host access', 
   assert.equal(manifest.background.service_worker, 'service-worker.js');
   assert.equal(manifest.background.type, 'module');
   assert.deepEqual(manifest.host_permissions, [
-    'https://www.ebay.com/*', 'https://www.amazon.com/*', 'https://www.walmart.com/*', 'https://www.bestbuy.com/*'
+    ...shoppingHosts,
+    'https://auction-jays-list.vercel.app/*'
   ]);
-  assert.deepEqual(manifest.content_scripts[0].matches, manifest.host_permissions);
+  assert.deepEqual(manifest.content_scripts[0].matches, shoppingHosts);
   assert.deepEqual(manifest.content_scripts[0].js, ['content/entry.js']);
   assert.equal(manifest.content_scripts[0].world, 'ISOLATED');
   assert.equal(manifest.content_scripts[0].type, undefined);
@@ -191,7 +198,7 @@ test('manifest v3 exposes explicit scan permissions without broad host access', 
       'content/index.js', 'content/scanner.js', 'content/page-observer.js',
       'adapters/*.js', 'messaging/messages.js'
     ],
-    matches: manifest.host_permissions
+    matches: shoppingHosts
   }]);
   assert.ok(!JSON.stringify(manifest).includes('<all_urls>'));
 });

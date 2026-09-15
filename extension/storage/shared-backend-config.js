@@ -1,4 +1,5 @@
 export const SHARED_BACKEND_STORAGE_KEY = 'auctionSharedBackendEndpoint';
+export const DEFAULT_SHARED_BACKEND_ENDPOINT = 'https://auction-jays-list.vercel.app/api/product-scan';
 
 function normalizeEndpoint(value) {
   const text = String(value ?? '').trim();
@@ -31,19 +32,19 @@ export function createSharedBackendConfigStore(storageArea) {
     async get() {
       const stored = await storageArea.get(SHARED_BACKEND_STORAGE_KEY);
       const raw = stored?.[SHARED_BACKEND_STORAGE_KEY];
-      if (!raw) return null;
+      if (!raw) return DEFAULT_SHARED_BACKEND_ENDPOINT;
       try {
-        return normalizeEndpoint(raw);
+        return normalizeEndpoint(raw) ?? DEFAULT_SHARED_BACKEND_ENDPOINT;
       } catch {
         await storageArea.remove(SHARED_BACKEND_STORAGE_KEY);
-        return null;
+        return DEFAULT_SHARED_BACKEND_ENDPOINT;
       }
     },
     async set(value) {
       const endpoint = normalizeEndpoint(value);
       if (!endpoint) {
         await storageArea.remove(SHARED_BACKEND_STORAGE_KEY);
-        return null;
+        return DEFAULT_SHARED_BACKEND_ENDPOINT;
       }
       await storageArea.set({ [SHARED_BACKEND_STORAGE_KEY]: endpoint });
       return endpoint;
