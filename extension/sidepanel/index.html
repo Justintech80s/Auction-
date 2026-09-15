@@ -6,11 +6,46 @@
   <meta name="color-scheme" content="light dark">
   <title>Auction Shopping Assistant</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./shared-results.css">
 </head>
 <body>
   <main class="panel-shell" aria-live="polite">
     <header class="panel-header"><div><p class="eyebrow">AUCTION</p><h1 id="panel-title">Ready to analyze</h1></div><span id="panel-state" class="state-pill">idle</span></header>
     <p id="panel-message" class="panel-message">Open a supported product page to begin.</p>
+
+    <section id="shared-scan-results" class="search-card" aria-labelledby="shared-product-heading" hidden>
+      <section class="condition-card shared-product-card">
+        <p class="label">Product Identified</p>
+        <div class="shared-product-row">
+          <img id="shared-product-image" class="shared-product-image" alt="" hidden>
+          <div>
+            <h2 id="shared-product-heading">—</h2>
+            <p id="shared-product-meta" class="search-product-title">—</p>
+            <div id="shared-product-features" class="feature-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="shared-lowest-price-card" class="condition-card" hidden>
+        <p class="label">Lowest Price Found</p>
+        <div class="lowest-price-row">
+          <strong id="shared-lowest-price" class="lowest-price">—</strong>
+          <span id="shared-lowest-store" class="source-status">—</span>
+        </div>
+        <p id="shared-lowest-details" class="helper-text">—</p>
+        <a id="shared-lowest-link" class="buy-link" target="_blank" rel="noopener noreferrer" hidden>Visit Store</a>
+      </section>
+
+      <section class="condition-card" aria-labelledby="shared-comparison-heading">
+        <div class="condition-heading"><h3 id="shared-comparison-heading">Price Comparison</h3><span id="shared-comparison-count" class="offer-count">0 offers</span></div>
+        <div id="shared-comparison-list" class="offer-list"></div>
+      </section>
+
+      <section id="shared-savings-card" class="condition-card" hidden>
+        <p class="label">Savings Tips</p>
+        <ul id="shared-savings-tips" class="savings-list"></ul>
+      </section>
+    </section>
 
     <section id="cross-store-search" class="search-card" aria-labelledby="search-heading" hidden>
       <div class="search-heading-row">
@@ -74,5 +109,6 @@
     <footer><p>Recommendations come from Auction's valuation, sold-evidence, Opportunity, and Guardian pipeline.</p></footer>
   </main>
   <script type="module" src="./app.js"></script>
+  <script type="module" src="./shared-session.js"></script>
 </body>
 </html>

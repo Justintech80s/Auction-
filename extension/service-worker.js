@@ -11,6 +11,14 @@ import {
   createExtensionMessage,
   validateExtensionMessage
 } from './messaging/messages.js';
+import {
+  createMemoryScanSessionStore,
+  createScanSessionStore
+} from './storage/scan-session.js';
+
+export const SCAN_SESSION_REQUEST = 'AUCTION_SCAN_SESSION_REQUEST';
+export const SCAN_SESSION_STATE = 'AUCTION_SCAN_SESSION_STATE';
+export const SHARED_SCAN_RESULT = 'AUCTION_SHARED_SCAN_RESULT';
 
 function projectAuctionResult(result = {}) {
   const valuation = result?.valuation ?? null;
@@ -45,6 +53,19 @@ function searchStatus({ offers, groups, providerErrors }) {
   if (!hasRecommendedExact(groups)) return 'no_exact_match';
   if (errorCount > 0) return 'partial_results';
   return 'complete';
+}
+
+function scanId() {
+  return `scan-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function sessionStateForSharedStatus(status) {
+  if (status === 'complete') return 'complete';
+  if (status === 'partial_results') return 'partial_results';
+  if (status === 'needs_confirmation') return 'needs_confirmation';
+  if (status === 'no_results') return 'no_results';
+  if (status === 'provider_unavailable') return 'provider_unavailable';
+  return 'error';
 }
 
 export function createAuctionAnalysisHandler({
@@ -85,6 +106,8 @@ export function createAuctionServiceWorker({
   searchAcrossStoresImpl,
   rankOffersImpl = rankOffers,
   searchProviders = [],
+  sharedBackend = null,
+  scanSessionStore = createMemoryScanSessionStore(),
   publish
 } = {}) {
   const messageRuntime = assertRuntime(runtime);
@@ -92,6 +115,12 @@ export function createAuctionServiceWorker({
   if (typeof analyzeProduct !== 'function') throw new TypeError('analyze function is required');
   if (typeof identifyProductImpl !== 'function') throw new TypeError('identifyProduct implementation is required');
   if (typeof rankOffersImpl !== 'function') throw new TypeError('rankOffers implementation is required');
+  if (!scanSessionStore || typeof scanSessionStore.get !== 'function' || typeof scanSessionStore.set !== 'function') {
+    throw new TypeError('scanSessionStore must provide get and set');
+  }
+  if (sharedBackend !== null && typeof sharedBackend?.scanProduct !== 'function') {
+    throw new TypeError('sharedBackend must provide scanProduct');
+  }
 
   const searchStores = searchAcrossStoresImpl ?? ((identity) => searchAcrossStores(identity, {
     providers: searchProviders
@@ -102,7 +131,7 @@ export function createAuctionServiceWorker({
     try {
       await globalThis.chrome?.runtime?.sendMessage?.(message);
     } catch {
-      // Side panel or popup may have closed; search completion remains safe.
+      // Side panel or popup may have closed; persisted scan state remains available.
     }
   });
   if (typeof publishMessage !== 'function') throw new TypeError('publish function is required');
@@ -118,7 +147,42 @@ export function createAuctionServiceWorker({
     }
   }
 
-  async function searchIdentity(identity) {
+  async function persistSession(session) {
+    try {
+      return await scanSessionStore.set(session);
+    } catch {
+      return null;
+    }
+  }
+
+  async function publishSession(session) {
+    const stored = await persistSession(session);
+    const message = Object.freeze({
+      type: SCAN_SESSION_STATE,
+      payload: stored ?? session
+    });
+    await publishSafely(message);
+    return message;
+  }
+
+  async function searchIdentity(identity, context = {}) {
+    await publishSession({
+      scanId: context.scanId ?? null,
+      tabId: context.tabId ?? null,
+      sourceUrl: context.sourceUrl ?? identity?.sourceUrl ?? null,
+      state: 'searching_stores',
+      identifiedProduct: identity ? {
+        title: identity.title,
+        brand: identity.brand,
+        model: identity.model,
+        features: Object.entries(identity.specs ?? {}).slice(0, 12).map(([key, value]) => `${key}: ${value}`),
+        imageUrl: identity.imageUrl,
+        confidence: identity.confidence
+      } : null,
+      result: null,
+      updatedAt: new Date().toISOString()
+    });
+
     let searchResult;
     try {
       searchResult = await searchStores(identity);
@@ -158,10 +222,94 @@ export function createAuctionServiceWorker({
     });
 
     await publishSafely(result);
+    const legacyStatus = result.payload.status;
+    await publishSession({
+      scanId: context.scanId ?? null,
+      tabId: context.tabId ?? null,
+      sourceUrl: context.sourceUrl ?? identity?.sourceUrl ?? null,
+      state: legacyStatus === 'complete'
+        ? 'complete'
+        : legacyStatus === 'partial_results'
+          ? 'partial_results'
+          : legacyStatus === 'provider_unavailable'
+            ? 'provider_unavailable'
+            : 'no_results',
+      identifiedProduct: identity ? {
+        title: identity.title,
+        brand: identity.brand,
+        model: identity.model,
+        features: Object.entries(identity.specs ?? {}).slice(0, 12).map(([key, value]) => `${key}: ${value}`),
+        imageUrl: identity.imageUrl,
+        confidence: identity.confidence
+      } : null,
+      result: { legacySearch: result.payload },
+      updatedAt: new Date().toISOString()
+    });
     return result;
   }
 
+  async function handleSharedScan(payload, context) {
+    await publishSession({
+      scanId: context.scanId,
+      tabId: payload.tabId,
+      sourceUrl: payload.evidence.sourceUrl,
+      state: 'identifying',
+      identifiedProduct: null,
+      result: null,
+      updatedAt: new Date().toISOString()
+    });
+
+    let sharedResult;
+    try {
+      sharedResult = await sharedBackend.scanProduct(payload.evidence);
+    } catch {
+      sharedResult = {
+        status: 'provider_unavailable',
+        identifiedProduct: null,
+        lowestPrice: null,
+        priceComparison: [],
+        savingsTips: [],
+        providerErrors: [{ source: 'shared_backend', code: 'provider_unavailable' }]
+      };
+    }
+
+    const finalSession = {
+      scanId: context.scanId,
+      tabId: payload.tabId,
+      sourceUrl: payload.evidence.sourceUrl,
+      state: sessionStateForSharedStatus(sharedResult.status),
+      identifiedProduct: sharedResult.identifiedProduct ?? null,
+      result: sharedResult,
+      errorCode: sharedResult.status === 'error' ? 'shared_backend_error' : null,
+      updatedAt: new Date().toISOString()
+    };
+    await publishSession(finalSession);
+
+    const response = Object.freeze({
+      type: SHARED_SCAN_RESULT,
+      payload: sharedResult
+    });
+    await publishSafely(response);
+    return response;
+  }
+
   async function handleScan(payload) {
+    const context = {
+      scanId: scanId(),
+      tabId: payload.tabId,
+      sourceUrl: payload.evidence?.sourceUrl ?? null
+    };
+
+    await publishSession({
+      ...context,
+      state: 'scanning',
+      identifiedProduct: null,
+      result: null,
+      updatedAt: new Date().toISOString()
+    });
+
+    if (sharedBackend) return handleSharedScan(payload, context);
+
     let identified;
     try {
       identified = await identifyProductImpl(payload.evidence);
@@ -178,11 +326,28 @@ export function createAuctionServiceWorker({
     });
     await publishSafely(scanResult);
 
-    if (status !== 'identified' || !scanResult.payload.identity) return scanResult;
-    return searchIdentity(scanResult.payload.identity);
+    if (status !== 'identified' || !scanResult.payload.identity) {
+      await publishSession({
+        ...context,
+        state: status === 'needs_confirmation' ? 'needs_confirmation' : 'error',
+        identifiedProduct: null,
+        result: null,
+        errorCode: status === 'unidentified' ? 'unidentified' : null,
+        updatedAt: new Date().toISOString()
+      });
+      return scanResult;
+    }
+    return searchIdentity(scanResult.payload.identity, context);
   }
 
   async function handleMessage(message) {
+    if (message?.type === SCAN_SESSION_REQUEST) {
+      return Object.freeze({
+        type: SCAN_SESSION_STATE,
+        payload: await scanSessionStore.get()
+      });
+    }
+
     if (message?.type === MESSAGE_TYPES.ANALYSIS_REQUEST) {
       return client.handleMessage(message);
     }
@@ -226,5 +391,9 @@ export function createAuctionServiceWorker({
 
 const chromeRuntime = globalThis.chrome?.runtime;
 if (chromeRuntime?.onMessage?.addListener && chromeRuntime?.onMessage?.removeListener) {
-  createAuctionServiceWorker({ runtime: chromeRuntime }).start();
+  const sessionArea = globalThis.chrome?.storage?.session;
+  const sessionStore = sessionArea
+    ? createScanSessionStore(sessionArea)
+    : createMemoryScanSessionStore();
+  createAuctionServiceWorker({ runtime: chromeRuntime, scanSessionStore: sessionStore }).start();
 }
