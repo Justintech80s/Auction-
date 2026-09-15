@@ -13,6 +13,54 @@ const COPY_DIRECTORIES = Object.freeze([
   'storage'
 ]);
 
+const BROWSER_SRC_ENTRIES = Object.freeze([
+  'pipeline.js',
+  'connectors/product-search-backend.js',
+  'product-search/identify.js',
+  'product-search/ranker.js',
+  'product-search/search.js',
+  'product-search/contracts.js'
+]);
+
+const STATIC_IMPORT_PATTERN = /(?:import|export)\s+(?:[^'";]*?\s+from\s+)?['"](\.[^'"]+)['"]/g;
+
+function sourceRelativePath(sourceRoot, absolutePath) {
+  const relative = path.relative(sourceRoot, absolutePath);
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error('browser source dependency escaped src root');
+  }
+  return relative;
+}
+
+async function copyBrowserSourceGraph({ sourceRoot, outputRoot, entries = BROWSER_SRC_ENTRIES }) {
+  const pending = entries.map(entry => path.resolve(sourceRoot, entry));
+  const copied = new Set();
+
+  while (pending.length > 0) {
+    const absolutePath = pending.pop();
+    const relativePath = sourceRelativePath(sourceRoot, absolutePath);
+    if (copied.has(relativePath)) continue;
+
+    const source = await readFile(absolutePath, 'utf8');
+    copied.add(relativePath);
+
+    const destination = path.join(outputRoot, relativePath);
+    await mkdir(path.dirname(destination), { recursive: true });
+    await writeFile(destination, source, 'utf8');
+
+    STATIC_IMPORT_PATTERN.lastIndex = 0;
+    for (const match of source.matchAll(STATIC_IMPORT_PATTERN)) {
+      const specifier = match[1];
+      const resolved = path.resolve(path.dirname(absolutePath), specifier);
+      const dependency = path.extname(resolved) ? resolved : `${resolved}.js`;
+      sourceRelativePath(sourceRoot, dependency);
+      pending.push(dependency);
+    }
+  }
+
+  return copied;
+}
+
 export async function buildExtensionPackage({
   repoRoot = DEFAULT_REPO_ROOT,
   outputDir = path.join(repoRoot, 'dist', 'auction-extension')
@@ -74,7 +122,10 @@ export async function buildExtensionPackage({
     'utf8'
   );
 
-  await cp(sourceRoot, path.join(outputDir, 'src'), { recursive: true });
+  await copyBrowserSourceGraph({
+    sourceRoot,
+    outputRoot: path.join(outputDir, 'src')
+  });
 
   return outputDir;
 }
