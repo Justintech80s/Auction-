@@ -64,3 +64,58 @@ test('product scan removes non-https evidence URLs', async () => {
   assert.equal(JSON.stringify(result.body).includes('unsafe.example'), false);
   assert.equal(JSON.stringify(result.body).includes('javascript:'), false);
 });
+
+test('product scan ranks safe exact provider offers and returns lowest delivered price', async () => {
+  const provider = {
+    name: 'fixture',
+    trustTier: 'trusted',
+    async searchOffers() {
+      return [
+        {
+          source: 'fixture',
+          sourceId: 'offer-1',
+          store: 'Fixture Store',
+          title: 'Dell Latitude 7420 16GB 512GB SSD',
+          url: 'https://shop.example/dell-7420',
+          imageUrl: 'https://shop.example/dell.jpg',
+          brand: 'Dell',
+          model: 'Latitude 7420',
+          category: 'Laptop',
+          identifiers: {},
+          specs: { ram: '16GB', storage: '512GB SSD' },
+          condition: 'used',
+          itemPrice: 220,
+          shipping: 15,
+          currency: 'USD',
+          availability: 'in_stock',
+          sourceConfidence: 0.95
+        }
+      ];
+    }
+  };
+
+  const result = await handleProductScan({
+    action: 'product_scan',
+    evidence: {
+      title: 'Dell Latitude 7420',
+      brand: 'Dell',
+      model: 'Latitude 7420',
+      category: 'Laptop',
+      condition: 'used',
+      specs: { ram: '16GB', storage: '512GB SSD' },
+      sourceUrl: 'https://example.com/dell-7420',
+      imageUrl: 'https://example.com/dell.jpg',
+      confidence: 0.95
+    }
+  }, { providers: [provider] });
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.status, 'complete');
+  assert.equal(result.body.priceComparison.length, 1);
+  assert.equal(result.body.lowestPrice.store, 'Fixture Store');
+  assert.equal(result.body.lowestPrice.itemPrice, 220);
+  assert.equal(result.body.lowestPrice.shipping, 15);
+  assert.equal(result.body.lowestPrice.total, 235);
+  assert.equal(result.body.lowestPrice.url, 'https://shop.example/dell-7420');
+  assert.deepEqual(result.body.providerErrors, []);
+});
