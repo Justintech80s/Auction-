@@ -16,7 +16,8 @@ test('manifest adds explicit scan permissions and toolbar popup without all_urls
     'https://www.ebay.com/*',
     'https://www.amazon.com/*',
     'https://www.walmart.com/*',
-    'https://www.bestbuy.com/*'
+    'https://www.bestbuy.com/*',
+    'https://auction-jays-list.vercel.app/*'
   ]);
 });
 
