@@ -1,4 +1,5 @@
 import { createPostgresCatalog } from './postgres-catalog.js';
+import { createPagePriceObservationStore } from './page-price-observations.js';
 
 function validatedConnectionString(value) {
   if (typeof value !== 'string' || !value.trim()) return null;
@@ -35,5 +36,11 @@ export async function createPostgresCatalogFromEnv({
     allowExitOnIdle: true
   });
 
-  return createPostgresCatalog({ pool });
+  const catalog = createPostgresCatalog({ pool });
+  const observations = createPagePriceObservationStore({ pool });
+  return Object.freeze({
+    persistScanResult: catalog.persistScanResult.bind(catalog),
+    persistPageObservation: observations.persistPageObservation.bind(observations),
+    getPriceHistory: observations.getPriceHistory.bind(observations)
+  });
 }

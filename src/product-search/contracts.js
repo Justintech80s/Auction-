@@ -16,14 +16,8 @@ function httpsUrl(value, required = false) {
     if (required) throw new TypeError('https URL is required');
     return null;
   }
-
   let url;
-  try {
-    url = new URL(String(value));
-  } catch {
-    throw new TypeError('URL must be valid');
-  }
-
+  try { url = new URL(String(value)); } catch { throw new TypeError('URL must be valid'); }
   if (url.protocol !== 'https:') throw new TypeError('URL must use https');
   url.hash = '';
   return url.toString();
@@ -31,17 +25,10 @@ function httpsUrl(value, required = false) {
 
 function record(value, maxEntries) {
   if (value == null) return Object.freeze({});
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError('record must be an object');
-  }
-
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TypeError('record must be an object');
   const entries = Object.entries(value);
   if (entries.length > maxEntries) throw new RangeError('record has too many entries');
-
-  return Object.freeze(Object.fromEntries(entries.map(([key, entry]) => [
-    bounded(key, 64, true),
-    bounded(entry, 256, true)
-  ])));
+  return Object.freeze(Object.fromEntries(entries.map(([key, entry]) => [bounded(key, 64, true), bounded(entry, 256, true)])));
 }
 
 function capturedAt(value) {
@@ -61,9 +48,7 @@ export function normalizeCondition(value) {
 
 function normalizeConfidence(value) {
   const number = Number(value);
-  if (!Number.isFinite(number) || number < 0 || number > 1) {
-    throw new TypeError('confidence must be between 0 and 1');
-  }
+  if (!Number.isFinite(number) || number < 0 || number > 1) throw new TypeError('confidence must be between 0 and 1');
   return number;
 }
 
@@ -73,83 +58,53 @@ function optionalEnum(value, allowed) {
   return allowed.includes(normalized) ? normalized : null;
 }
 
+function observedPrice(value, currency) {
+  if (value == null) return { observedPrice: null, observedCurrency: null };
+  const price = Number(value);
+  if (!Number.isFinite(price) || price <= 0) throw new TypeError('observedPrice must be positive');
+  const normalizedCurrency = bounded(currency ?? 'USD', 3, true).toUpperCase();
+  if (normalizedCurrency !== 'USD') throw new TypeError('only USD is supported');
+  return { observedPrice: Math.round(price * 100) / 100, observedCurrency: normalizedCurrency };
+}
+
 export function normalizeProductIdentity(input = {}, context = {}) {
   return Object.freeze({
-    title: bounded(input.title, 512, true),
-    brand: bounded(input.brand, 128),
-    model: bounded(input.model, 128),
-    category: bounded(input.category, 256),
-    condition: normalizeCondition(input.condition),
-    identifiers: record(input.identifiers, MAX_IDENTIFIERS),
-    specs: record(input.specs, MAX_SPECS),
-    sourceUrl: httpsUrl(input.sourceUrl, true),
-    imageUrl: httpsUrl(input.imageUrl),
-    confidence: normalizeConfidence(input.confidence),
-    capturedAt: capturedAt(context.now ?? input.capturedAt)
+    title: bounded(input.title, 512, true), brand: bounded(input.brand, 128), model: bounded(input.model, 128),
+    category: bounded(input.category, 256), condition: normalizeCondition(input.condition), identifiers: record(input.identifiers, MAX_IDENTIFIERS),
+    specs: record(input.specs, MAX_SPECS), sourceUrl: httpsUrl(input.sourceUrl, true), imageUrl: httpsUrl(input.imageUrl),
+    confidence: normalizeConfidence(input.confidence), capturedAt: capturedAt(context.now ?? input.capturedAt)
   });
 }
 
 export function normalizeScanEvidence(input = {}, context = {}) {
-  const evidenceKinds = Array.isArray(input.evidenceKinds)
-    ? input.evidenceKinds.slice(0, 8).map(value => bounded(value, 64, true))
-    : [];
-
+  const evidenceKinds = Array.isArray(input.evidenceKinds) ? input.evidenceKinds.slice(0, 8).map(value => bounded(value, 64, true)) : [];
+  const pricing = observedPrice(input.observedPrice, input.observedCurrency);
   return Object.freeze({
-    sourceUrl: httpsUrl(input.sourceUrl, true),
-    pageTitle: bounded(input.pageTitle, 512),
-    title: bounded(input.title, 512),
-    brand: bounded(input.brand, 128),
-    model: bounded(input.model, 128),
-    category: bounded(input.category, 256),
-    condition: input.condition == null ? null : normalizeCondition(input.condition),
-    identifiers: record(input.identifiers, MAX_IDENTIFIERS),
-    specs: record(input.specs, MAX_SPECS),
-    imageUrl: httpsUrl(input.imageUrl),
-    evidenceKinds: Object.freeze(evidenceKinds),
-    confidence: normalizeConfidence(input.confidence ?? 0),
-    capturedAt: capturedAt(context.now ?? input.capturedAt)
+    sourceUrl: httpsUrl(input.sourceUrl, true), pageTitle: bounded(input.pageTitle, 512), title: bounded(input.title, 512),
+    brand: bounded(input.brand, 128), model: bounded(input.model, 128), category: bounded(input.category, 256),
+    condition: input.condition == null ? null : normalizeCondition(input.condition), identifiers: record(input.identifiers, MAX_IDENTIFIERS),
+    specs: record(input.specs, MAX_SPECS), imageUrl: httpsUrl(input.imageUrl), evidenceKinds: Object.freeze(evidenceKinds),
+    observedPrice: pricing.observedPrice, observedCurrency: pricing.observedCurrency,
+    confidence: normalizeConfidence(input.confidence ?? 0), capturedAt: capturedAt(context.now ?? input.capturedAt)
   });
 }
 
 export function normalizeOffer(input = {}) {
   const itemPrice = Number(input.itemPrice);
-  if (!Number.isFinite(itemPrice) || itemPrice <= 0) {
-    throw new TypeError('itemPrice must be positive');
-  }
-
+  if (!Number.isFinite(itemPrice) || itemPrice <= 0) throw new TypeError('itemPrice must be positive');
   const shipping = input.shipping == null ? null : Number(input.shipping);
-  if (shipping !== null && (!Number.isFinite(shipping) || shipping < 0)) {
-    throw new TypeError('shipping must be non-negative');
-  }
-
+  if (shipping !== null && (!Number.isFinite(shipping) || shipping < 0)) throw new TypeError('shipping must be non-negative');
   const currency = bounded(input.currency, 3, true).toUpperCase();
   if (currency !== 'USD') throw new TypeError('only USD is supported');
-
   const source = bounded(input.source, 64, true);
   const sourceId = bounded(input.sourceId, 256, true);
-
   return Object.freeze({
-    offerId: `${source}:${sourceId}`,
-    source,
-    sourceId,
-    store: bounded(input.store, 128, true),
-    title: bounded(input.title, 512, true),
-    url: httpsUrl(input.url, true),
-    imageUrl: httpsUrl(input.imageUrl),
-    brand: bounded(input.brand, 128),
-    model: bounded(input.model, 128),
-    category: bounded(input.category, 256),
-    identifiers: record(input.identifiers, MAX_IDENTIFIERS),
-    specs: record(input.specs, MAX_SPECS),
-    condition: normalizeCondition(input.condition),
-    itemPrice,
-    shipping,
-    estimatedTotal: shipping === null
-      ? null
-      : Math.round((itemPrice + shipping) * 100) / 100,
-    currency,
-    availability: bounded(input.availability, 64),
-    trustTier: input.trustTier === 'trusted' ? 'trusted' : 'broad',
+    offerId: `${source}:${sourceId}`, source, sourceId, store: bounded(input.store, 128, true), title: bounded(input.title, 512, true),
+    url: httpsUrl(input.url, true), imageUrl: httpsUrl(input.imageUrl), brand: bounded(input.brand, 128), model: bounded(input.model, 128),
+    category: bounded(input.category, 256), identifiers: record(input.identifiers, MAX_IDENTIFIERS), specs: record(input.specs, MAX_SPECS),
+    condition: normalizeCondition(input.condition), itemPrice, shipping,
+    estimatedTotal: shipping === null ? null : Math.round((itemPrice + shipping) * 100) / 100,
+    currency, availability: bounded(input.availability, 64), trustTier: input.trustTier === 'trusted' ? 'trusted' : 'broad',
     sourceConfidence: normalizeConfidence(input.sourceConfidence ?? 0),
     matchClassification: optionalEnum(input.matchClassification, ['exact', 'similar', 'rejected']),
     matchScore: input.matchScore == null ? null : normalizeConfidence(input.matchScore),
