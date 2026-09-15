@@ -81,6 +81,37 @@ test('uses fallback product lookup when barcode is absent', async () => {
   assert.match(calls[0].text, /select\s+id\s+from\s+auction\.products/i);
 });
 
+test('uses one transaction and rolls back if price-history persistence fails', async () => {
+  const clientCalls = [];
+  const client = {
+    async query(text, params = []) {
+      clientCalls.push({ text, params });
+      if (/^begin$/i.test(text) || /^commit$/i.test(text) || /^rollback$/i.test(text)) return { rows: [] };
+      if (/auction\.products/i.test(text)) return { rows: [{ id: 'product-1' }] };
+      if (/auction\.stores/i.test(text)) return { rows: [{ id: 'store-1' }] };
+      if (/auction\.offers/i.test(text)) return { rows: [{ id: 'offer-1' }] };
+      if (/auction\.price_history/i.test(text)) throw new Error('history_write_failed');
+      return { rows: [] };
+    },
+    release() {
+      clientCalls.push({ text: 'RELEASE', params: [] });
+    }
+  };
+  const pool = {
+    async connect() {
+      return client;
+    }
+  };
+
+  const catalog = createPostgresCatalog({ pool });
+  await assert.rejects(() => catalog.persistScanResult(records), /history_write_failed/);
+
+  assert.equal(clientCalls[0].text, 'BEGIN');
+  assert.ok(clientCalls.some(call => /^rollback$/i.test(call.text)));
+  assert.equal(clientCalls.some(call => /^commit$/i.test(call.text)), false);
+  assert.equal(clientCalls.at(-1).text, 'RELEASE');
+});
+
 test('rejects records that did not pass the safe mapper contract', async () => {
   let called = false;
   const catalog = createPostgresCatalog({ query: async () => { called = true; return { rows: [] }; } });
