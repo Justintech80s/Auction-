@@ -2,6 +2,34 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handleProductScan } from '../api/product-scan.js';
 
+function exactFixtureProvider() {
+  return {
+    name: 'fixture',
+    trustTier: 'trusted',
+    async searchOffers() {
+      return [{
+        source: 'fixture', sourceId: 'offer-1', store: 'Fixture Store',
+        title: 'Dell Latitude 7420 16GB 512GB SSD',
+        url: 'https://shop.example/dell-7420', imageUrl: 'https://shop.example/dell.jpg',
+        brand: 'Dell', model: 'Latitude 7420', category: 'Laptop', identifiers: {},
+        specs: { ram: '16GB', storage: '512GB SSD' }, condition: 'used',
+        itemPrice: 220, shipping: 15, currency: 'USD', availability: 'in_stock', sourceConfidence: 0.95
+      }];
+    }
+  };
+}
+
+function exactFixturePayload() {
+  return {
+    action: 'product_scan',
+    evidence: {
+      title: 'Dell Latitude 7420', brand: 'Dell', model: 'Latitude 7420', category: 'Laptop',
+      condition: 'used', specs: { ram: '16GB', storage: '512GB SSD' },
+      sourceUrl: 'https://example.com/dell-7420', imageUrl: 'https://example.com/dell.jpg', confidence: 0.95
+    }
+  };
+}
+
 test('product scan rejects unsupported actions', async () => {
   const result = await handleProductScan({ action: 'other' });
   assert.equal(result.statusCode, 400);
@@ -66,29 +94,7 @@ test('product scan removes non-https evidence URLs', async () => {
 });
 
 test('product scan ranks safe exact provider offers and returns lowest delivered price', async () => {
-  const provider = {
-    name: 'fixture',
-    trustTier: 'trusted',
-    async searchOffers() {
-      return [{
-        source: 'fixture', sourceId: 'offer-1', store: 'Fixture Store',
-        title: 'Dell Latitude 7420 16GB 512GB SSD',
-        url: 'https://shop.example/dell-7420', imageUrl: 'https://shop.example/dell.jpg',
-        brand: 'Dell', model: 'Latitude 7420', category: 'Laptop', identifiers: {},
-        specs: { ram: '16GB', storage: '512GB SSD' }, condition: 'used',
-        itemPrice: 220, shipping: 15, currency: 'USD', availability: 'in_stock', sourceConfidence: 0.95
-      }];
-    }
-  };
-
-  const result = await handleProductScan({
-    action: 'product_scan',
-    evidence: {
-      title: 'Dell Latitude 7420', brand: 'Dell', model: 'Latitude 7420', category: 'Laptop',
-      condition: 'used', specs: { ram: '16GB', storage: '512GB SSD' },
-      sourceUrl: 'https://example.com/dell-7420', imageUrl: 'https://example.com/dell.jpg', confidence: 0.95
-    }
-  }, { providers: [provider] });
+  const result = await handleProductScan(exactFixturePayload(), { providers: [exactFixtureProvider()] });
 
   assert.equal(result.statusCode, 200);
   assert.equal(result.body.status, 'complete');
@@ -101,4 +107,45 @@ test('product scan ranks safe exact provider offers and returns lowest delivered
   assert.equal(result.body.lowestPrice.estimatedTotal, 235);
   assert.equal(result.body.lowestPrice.url, 'https://shop.example/dell-7420');
   assert.deepEqual(result.body.providerErrors, []);
+});
+
+test('product scan persists each returned Guardian-approved exact offer', async () => {
+  const persisted = [];
+  const catalog = {
+    async persistScanResult(records) {
+      persisted.push(records);
+      return { productId: 'p1', storeId: 's1', offerId: 'o1' };
+    }
+  };
+
+  const result = await handleProductScan(exactFixturePayload(), {
+    providers: [exactFixtureProvider()],
+    catalog
+  });
+
+  assert.equal(result.body.status, 'complete');
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0].offer.guardianDecision, 'allow');
+  assert.equal(persisted[0].offer.matchClassification, 'exact');
+  assert.equal(persisted[0].offer.itemPrice, 220);
+  assert.equal(persisted[0].offer.purchaseUrl, 'https://shop.example/dell-7420');
+});
+
+test('database persistence failure never breaks or leaks into live scan results', async () => {
+  const catalog = {
+    async persistScanResult() {
+      throw new Error('postgres password secret-db-host');
+    }
+  };
+
+  const result = await handleProductScan(exactFixturePayload(), {
+    providers: [exactFixtureProvider()],
+    catalog
+  });
+
+  assert.equal(result.statusCode, 200);
+  assert.equal(result.body.status, 'complete');
+  assert.equal(result.body.priceComparison.length, 1);
+  assert.deepEqual(result.body.providerErrors, []);
+  assert.doesNotMatch(JSON.stringify(result.body), /postgres|password|secret-db-host/i);
 });
