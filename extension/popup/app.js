@@ -1,5 +1,6 @@
 import { collectActiveProductEvidence } from '../content/active-scan.js';
 import { MESSAGE_TYPES, createExtensionMessage } from '../messaging/messages.js';
+import { createSharedBackendConfigStore } from '../storage/shared-backend-config.js';
 
 function assertDependency(value, method, label) {
   if (!value || typeof value[method] !== 'function') {
@@ -22,7 +23,8 @@ export function createPopupApp({
   tabs,
   scripting,
   runtime,
-  sidePanel
+  sidePanel,
+  storage
 } = {}) {
   if (!documentLike?.getElementById) throw new TypeError('documentLike is required');
   const tabsApi = assertDependency(tabs, 'query', 'tabs');
@@ -33,7 +35,13 @@ export function createPopupApp({
   const scanButton = documentLike.getElementById('scan-product');
   const sidebarButton = documentLike.getElementById('open-sidebar');
   const status = documentLike.getElementById('popup-status');
+  const backendEndpoint = documentLike.getElementById('backend-endpoint');
+  const saveBackend = documentLike.getElementById('save-backend');
   if (!scanButton || !sidebarButton || !status) throw new TypeError('popup controls are required');
+
+  const backendStore = storage
+    ? createSharedBackendConfigStore(storage)
+    : null;
 
   function setStatus(message) {
     status.textContent = String(message || '');
@@ -72,7 +80,6 @@ export function createPopupApp({
         return false;
       }
 
-      // Call sidePanel.open immediately after active-tab resolution while the click activation is current.
       const openPromise = Promise.resolve(sidePanelApi.open({ tabId: tab.id })).catch(() => undefined);
       const injections = await scriptingApi.executeScript({
         target: { tabId: tab.id },
@@ -101,15 +108,45 @@ export function createPopupApp({
     }
   }
 
+  async function hydrateBackendEndpoint() {
+    if (!backendStore || !backendEndpoint) return null;
+    const endpoint = await backendStore.get();
+    backendEndpoint.value = endpoint ?? '';
+    return endpoint;
+  }
+
+  async function saveBackendEndpoint() {
+    if (!backendStore || !backendEndpoint) return false;
+    if (saveBackend) saveBackend.disabled = true;
+    try {
+      const endpoint = await backendStore.set(backendEndpoint.value);
+      backendEndpoint.value = endpoint ?? '';
+      setStatus(endpoint
+        ? 'Shared Auction backend saved. Reopen the extension to apply it.'
+        : 'Shared Auction backend cleared.');
+      return true;
+    } catch {
+      setStatus('Enter a valid HTTPS backend URL with no embedded credentials.');
+      return false;
+    } finally {
+      if (saveBackend) saveBackend.disabled = false;
+    }
+  }
+
   scanButton.addEventListener('click', scanProduct);
   sidebarButton.addEventListener('click', openSidebar);
+  saveBackend?.addEventListener('click', saveBackendEndpoint);
+  void hydrateBackendEndpoint();
 
   return Object.freeze({
     scanProduct,
     openSidebar,
+    hydrateBackendEndpoint,
+    saveBackendEndpoint,
     destroy() {
       scanButton.removeEventListener?.('click', scanProduct);
       sidebarButton.removeEventListener?.('click', openSidebar);
+      saveBackend?.removeEventListener?.('click', saveBackendEndpoint);
     }
   });
 }
@@ -120,7 +157,8 @@ if (typeof document !== 'undefined' && globalThis.chrome) {
     tabs: globalThis.chrome.tabs,
     scripting: globalThis.chrome.scripting,
     runtime: globalThis.chrome.runtime,
-    sidePanel: globalThis.chrome.sidePanel
+    sidePanel: globalThis.chrome.sidePanel,
+    storage: globalThis.chrome.storage?.local
   });
 
   if (document.readyState === 'loading') {
