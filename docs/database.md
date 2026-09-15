@@ -68,9 +68,9 @@ After the dedicated database is provisioned and `AUCTION_DATABASE_URL` is config
 
 1. Redeploy the Auction Vercel project.
 2. Run `npm test` and `npm run build:extension`.
-3. Run `npm run verify:production -- https://auction-jays-list.vercel.app`.
+3. Discover the actual deployed Auction HTTPS domain, then run `npm run verify:production -- https://<actual-auction-domain>/api/product-scan`.
 4. Perform one controlled product scan using a known exact product.
 5. Verify the scan creates or updates exactly one product, one store, one offer, and appends one corresponding `price_history` row.
 6. Confirm rejected or non-exact offers do not create price-history rows.
 
-Do not fabricate store prices or database records to make the verification pass. A provider/database configuration failure should be reported as an environment issue and fixed at the deployment layer.
+Do not guess or fabricate the deployment domain, store prices, or database records to make verification pass. A provider/database configuration failure should be reported as an environment issue and fixed at the deployment layer.
