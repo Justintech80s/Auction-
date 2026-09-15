@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "build:extension": "node scripts/build-extension.mjs"
+    "build:extension": "node scripts/build-extension.mjs",
+    "verify:production": "node scripts/production-readiness.mjs"
   },
   "engines": {
     "node": ">=20"
