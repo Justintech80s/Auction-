@@ -1,9 +1,12 @@
 import { searchAcrossStores } from '../src/product-search/search.js';
 import { rankOffers } from '../src/product-search/ranker.js';
 import { createEbayBrowseProvider } from '../src/product-search/providers/ebay-browse.js';
+import { toCatalogRecords } from '../src/persistence/catalog-records.js';
+import { createPostgresCatalogFromEnv } from '../src/persistence/postgres-runtime.js';
 
 const MAX_TEXT = 240;
 const MAX_FEATURES = 12;
+let catalogPromise = null;
 
 function cleanText(value, max = MAX_TEXT) {
   if (typeof value !== 'string') return null;
@@ -129,7 +132,34 @@ function configuredProviders(env = process.env) {
   return [createEbayBrowseProvider({ clientId, clientSecret })];
 }
 
-export async function handleProductScan(payload, { providers = [] } = {}) {
+async function configuredCatalog(env = process.env) {
+  if (!String(env?.AUCTION_DATABASE_URL ?? '').trim()) return null;
+  if (!catalogPromise) {
+    catalogPromise = createPostgresCatalogFromEnv({ env }).catch(() => null);
+  }
+  return catalogPromise;
+}
+
+async function persistSafeExactOffers(catalog, evidence, product, offers) {
+  if (!catalog || typeof catalog.persistScanResult !== 'function') return;
+
+  for (const offer of offers) {
+    const records = toCatalogRecords({
+      evidence,
+      identifiedProduct: product,
+      offer
+    });
+    if (!records) continue;
+
+    try {
+      await catalog.persistScanResult(records);
+    } catch {
+      // Persistence is best-effort. Database failures must never alter or leak into live pricing results.
+    }
+  }
+}
+
+export async function handleProductScan(payload, { providers = [], catalog = null } = {}) {
   if (!payload || payload.action !== 'product_scan') {
     return { statusCode: 400, body: { status: 'error' } };
   }
@@ -186,6 +216,8 @@ export async function handleProductScan(payload, { providers = [] } = {}) {
   const safeExact = (ranked.offers ?? []).filter(offer =>
     offer.matchClassification === 'exact' && offer.guardianDecision === 'allow'
   );
+  await persistSafeExactOffers(catalog, evidence, product, safeExact);
+
   const comparison = safeExact.map(sharedOffer);
   const errors = Array.isArray(searched.providerErrors) ? searched.providerErrors : [];
 
@@ -236,6 +268,10 @@ export default async function handler(req, res) {
     }
   }
 
-  const result = await handleProductScan(payload, { providers: configuredProviders() });
+  const catalog = await configuredCatalog();
+  const result = await handleProductScan(payload, {
+    providers: configuredProviders(),
+    catalog
+  });
   return res.status(result.statusCode).json(result.body);
 }

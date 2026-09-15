@@ -18,6 +18,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install production dependencies
+        run: npm install --omit=dev
       - name: Run full tests
         run: npm test
       - name: Build self-contained extension

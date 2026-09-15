@@ -8,6 +8,9 @@
     "build:extension": "node scripts/build-extension.mjs",
     "verify:production": "node scripts/production-readiness.mjs"
   },
+  "dependencies": {
+    "pg": "8.23.0"
+  },
   "engines": {
     "node": ">=20"
   }
