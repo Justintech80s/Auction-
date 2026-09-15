@@ -14,7 +14,7 @@ function validatedConnectionString(value) {
 }
 
 export async function createPostgresCatalogFromEnv({
-  env = process.env,
+  env = {},
   importPg = () => import('pg')
 } = {}) {
   const raw = env?.AUCTION_DATABASE_URL;
