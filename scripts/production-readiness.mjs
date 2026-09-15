@@ -14,12 +14,38 @@ function requireHttps(value) {
   return url;
 }
 
-export function validateProductionConfig({ endpoint } = {}) {
+export function validateDatabaseUrl(value) {
+  if (value == null || String(value).trim() === '') return null;
+
+  let url;
+  try {
+    url = new URL(String(value).trim());
+  } catch {
+    throw new TypeError('database URL must be a valid PostgreSQL URL');
+  }
+
+  if (url.protocol !== 'postgresql:' && url.protocol !== 'postgres:') {
+    throw new TypeError('database URL must use PostgreSQL');
+  }
+  if (!url.username || !url.password) {
+    throw new TypeError('database URL must include database credentials');
+  }
+  if (!url.hostname || !url.pathname || url.pathname === '/') {
+    throw new TypeError('database URL must include host and database name');
+  }
+  url.hash = '';
+  return url.toString();
+}
+
+export function validateProductionConfig({ endpoint, databaseUrl } = {}) {
   const url = requireHttps(endpoint);
   if (url.pathname !== '/api/product-scan') {
     throw new TypeError('endpoint must use /api/product-scan');
   }
-  return Object.freeze({ endpoint: url.toString() });
+  return Object.freeze({
+    endpoint: url.toString(),
+    databaseUrl: validateDatabaseUrl(databaseUrl)
+  });
 }
 
 function safeMerchantUrl(value) {
@@ -47,8 +73,8 @@ export function validateProductionScanResult(input) {
   return input;
 }
 
-export async function verifyProductionEndpoint({ endpoint, fetchImpl = globalThis.fetch } = {}) {
-  const config = validateProductionConfig({ endpoint });
+export async function verifyProductionEndpoint({ endpoint, databaseUrl, fetchImpl = globalThis.fetch } = {}) {
+  const config = validateProductionConfig({ endpoint, databaseUrl });
   if (typeof fetchImpl !== 'function') throw new TypeError('fetch implementation is required');
 
   const response = await fetchImpl(config.endpoint, {
@@ -79,6 +105,7 @@ export async function verifyProductionEndpoint({ endpoint, fetchImpl = globalThi
   return Object.freeze({
     ok: true,
     endpoint: config.endpoint,
+    databaseConfigured: Boolean(config.databaseUrl),
     status: result.status,
     providerConnected: result.status === 'complete' || result.status === 'partial_results',
     offerCount: result.priceComparison.length
@@ -88,7 +115,10 @@ export async function verifyProductionEndpoint({ endpoint, fetchImpl = globalThi
 if (import.meta.url === `file://${process.argv[1]}`) {
   const endpoint = process.argv[2] || process.env.AUCTION_PRODUCT_SCAN_ENDPOINT;
   try {
-    const summary = await verifyProductionEndpoint({ endpoint });
+    const summary = await verifyProductionEndpoint({
+      endpoint,
+      databaseUrl: process.env.AUCTION_DATABASE_URL
+    });
     console.log(JSON.stringify(summary, null, 2));
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
