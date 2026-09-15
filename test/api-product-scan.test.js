@@ -109,6 +109,20 @@ test('product scan ranks safe exact provider offers and returns lowest delivered
   assert.deepEqual(result.body.providerErrors, []);
 });
 
+test('product scan compares the current page price with the lowest exact delivered offer', async () => {
+  const payload = exactFixturePayload();
+  payload.evidence.observedPrice = 300;
+  payload.evidence.observedCurrency = 'USD';
+
+  const result = await handleProductScan(payload, { providers: [exactFixtureProvider()] });
+
+  assert.equal(result.body.status, 'complete');
+  assert.deepEqual(result.body.currentPagePrice, { amount: 300, currency: 'USD' });
+  assert.equal(result.body.lowestPrice.estimatedTotal, 235);
+  assert.deepEqual(result.body.savings, { amount: 65, currency: 'USD' });
+  assert.match(result.body.savingsTips[0], /save \$65\.00/i);
+});
+
 test('product scan persists each returned Guardian-approved exact offer', async () => {
   const persisted = [];
   const catalog = {
