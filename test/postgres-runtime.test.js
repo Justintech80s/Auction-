@@ -15,14 +15,19 @@ test('database runtime stays disabled when AUCTION_DATABASE_URL is absent', asyn
   assert.equal(imported, false);
 });
 
-test('database runtime creates a server-only pg pool and parameterized catalog', async () => {
+test('database runtime creates a server-only pg pool and transactional catalog', async () => {
   const constructed = [];
   class FakePool {
     constructor(options) {
       constructed.push(options);
     }
-    async query(text, params) {
-      return { rows: [{ id: `${params?.[0] ?? 'row'}-id` }] };
+    async connect() {
+      return {
+        async query() {
+          return { rows: [] };
+        },
+        release() {}
+      };
     }
   }
 
