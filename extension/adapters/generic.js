@@ -110,10 +110,14 @@ export function normalizeStructuredProduct(product, context, source = 'generic')
   }, context);
 }
 
-function extractOpenGraph(documentLike, context) {
-  const type = attributeValue(documentLike, 'meta[property="og:type"]');
-  if (type?.toLowerCase() !== 'product') return null;
+function hasOpenGraphProductEvidence(documentLike) {
+  const title = attributeValue(documentLike, 'meta[property="og:title"]');
+  const price = parseExplicitPrice(attributeValue(documentLike, 'meta[property="product:price:amount"]'));
+  const currency = attributeValue(documentLike, 'meta[property="product:price:currency"]');
+  return Boolean(title && price && currency);
+}
 
+function extractOpenGraph(documentLike, context) {
   const title = attributeValue(documentLike, 'meta[property="og:title"]');
   const price = parseExplicitPrice(attributeValue(documentLike, 'meta[property="product:price:amount"]'));
   const currency = attributeValue(documentLike, 'meta[property="product:price:currency"]');
@@ -131,7 +135,9 @@ function extractOpenGraph(documentLike, context) {
 export const genericAdapter = Object.freeze({
   name: 'generic',
   matches(_url, documentLike) {
-    return Boolean(findProductJsonLd(documentLike)) || attributeValue(documentLike, 'meta[property="og:type"]')?.toLowerCase() === 'product';
+    return Boolean(findProductJsonLd(documentLike))
+      || attributeValue(documentLike, 'meta[property="og:type"]')?.toLowerCase() === 'product'
+      || hasOpenGraphProductEvidence(documentLike);
   },
   extract(documentLike, context = {}) {
     const structured = findProductJsonLd(documentLike);
