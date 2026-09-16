@@ -2,60 +2,12 @@
   "manifest_version": 3,
   "name": "Auction Shopping Assistant",
   "version": "1.0.0",
-  "description": "Analyze supported shopping pages with Auction valuation, sold evidence, and Guardian risk checks.",
-  "permissions": [
-    "sidePanel",
-    "storage",
-    "activeTab",
-    "scripting"
-  ],
-  "host_permissions": [
-    "https://www.ebay.com/*",
-    "https://www.amazon.com/*",
-    "https://www.walmart.com/*",
-    "https://www.bestbuy.com/*",
-    "https://auction-jays-list.vercel.app/*"
-  ],
-  "action": {
-    "default_popup": "popup/index.html"
-  },
-  "background": {
-    "service_worker": "service-worker.js",
-    "type": "module"
-  },
-  "side_panel": {
-    "default_path": "sidepanel/index.html"
-  },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://www.ebay.com/*",
-        "https://www.amazon.com/*",
-        "https://www.walmart.com/*",
-        "https://www.bestbuy.com/*"
-      ],
-      "js": [
-        "content/entry.js"
-      ],
-      "run_at": "document_idle",
-      "world": "ISOLATED"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "content/index.js",
-        "content/scanner.js",
-        "content/page-observer.js",
-        "adapters/*.js",
-        "messaging/messages.js"
-      ],
-      "matches": [
-        "https://www.ebay.com/*",
-        "https://www.amazon.com/*",
-        "https://www.walmart.com/*",
-        "https://www.bestbuy.com/*"
-      ]
-    }
-  ]
+  "description": "Find verified same-product prices while shopping online.",
+  "permissions": ["sidePanel", "storage", "activeTab", "scripting"],
+  "host_permissions": ["https://*/*", "https://auction-jays-list.vercel.app/*"],
+  "action": {"default_popup": "popup/index.html"},
+  "background": {"service_worker": "service-worker.js", "type": "module"},
+  "side_panel": {"default_path": "sidepanel/index.html"},
+  "content_scripts": [{"matches": ["https://*/*"], "js": ["content/entry.js"], "run_at": "document_idle", "world": "ISOLATED"}],
+  "web_accessible_resources": [{"resources": ["content/index.js", "content/scanner.js", "content/page-observer.js", "content/checkout.js", "adapters/*.js", "messaging/messages.js"], "matches": ["https://*/*"]}]
 }
