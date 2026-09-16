@@ -122,6 +122,21 @@ test('generic adapter can use OpenGraph product metadata', () => {
   assert.equal(product.price, 159.99);
 });
 
+test('generic adapter recognizes Shopify-style product metadata without og:type', () => {
+  const url = 'https://shop.example.com/products/airknitx-boxer-brief?variant=41416598618225';
+  const doc = fakeDocument({
+    'meta[property="og:title"]': node({ attrs: { content: 'AIRKNITx Boxer Brief' } }),
+    'meta[property="product:price:amount"]': node({ attrs: { content: '34.00' } }),
+    'meta[property="product:price:currency"]': node({ attrs: { content: 'USD' } })
+  });
+
+  assert.equal(genericAdapter.matches(url, doc), true);
+  const product = genericAdapter.extract(doc, { ...context, url });
+  assert.equal(product.title, 'AIRKNITx Boxer Brief');
+  assert.equal(product.price, 34);
+  assert.equal(product.currency, 'USD');
+});
+
 test('adapters return null on ambiguous non-product pages', () => {
   const empty = fakeDocument();
   assert.equal(ebayAdapter.extract(empty, { ...context, url: 'https://www.ebay.com/sch/i.html?_nkw=walkman' }), null);
