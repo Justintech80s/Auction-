@@ -27,6 +27,10 @@ test('release package contains browser-reachable src only', async () => {
     assert.equal(await exists(path.join(outputDir, 'src', 'pipeline.js')), true);
     assert.equal(await exists(path.join(outputDir, 'src', 'connectors', 'product-search-backend.js')), true);
     assert.equal(await exists(path.join(outputDir, 'src', 'product-search', 'contracts.js')), true);
+    assert.equal(await exists(path.join(outputDir, 'storage', 'scan-session.js')), true);
+    assert.equal(await exists(path.join(outputDir, 'storage', 'cost-presets.js')), false);
+    assert.equal(await exists(path.join(outputDir, 'storage', 'watchlist.js')), false);
+    assert.equal(await exists(path.join(outputDir, 'storage', 'shared-backend-config.js')), false);
 
     assert.equal(await exists(path.join(outputDir, 'src', 'persistence')), false,
       'server-only persistence code must not ship in the browser extension');
