@@ -16,7 +16,6 @@ import {
   createMemoryScanSessionStore,
   createScanSessionStore
 } from './storage/scan-session.js';
-import { createSharedBackendConfigStore } from './storage/shared-backend-config.js';
 
 export const SCAN_SESSION_REQUEST = 'AUCTION_SCAN_SESSION_REQUEST';
 export const SCAN_SESSION_STATE = 'AUCTION_SCAN_SESSION_STATE';
@@ -413,7 +412,7 @@ export function startChromeAuctionServiceWorker({ chromeLike = globalThis.chrome
   const sessionStore = sessionArea
     ? createScanSessionStore(sessionArea)
     : createMemoryScanSessionStore();
-  const sharedBackend = createLazySharedBackend(chromeLike?.storage?.local);
+  const sharedBackend = createServerBackend();
 
   const worker = createAuctionServiceWorker({
     runtime: chromeRuntime,
