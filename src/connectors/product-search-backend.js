@@ -173,10 +173,23 @@ function normalizeSharedResult(value) {
     .map(normalizeSharedOffer)
     .filter(Boolean));
 
+  const currentPagePrice = value.currentPagePrice == null ? null : Object.freeze({
+    amount: finiteAmount(value.currentPagePrice.amount, { positive: true }),
+    currency: boundedString(value.currentPagePrice.currency, 3, { required: true }).toUpperCase()
+  });
+  if (currentPagePrice && currentPagePrice.currency !== 'USD') throw safeFailure();
+  const savings = value.savings == null ? null : Object.freeze({
+    amount: finiteAmount(value.savings.amount, { positive: true }),
+    currency: boundedString(value.savings.currency, 3, { required: true }).toUpperCase()
+  });
+  if (savings && savings.currency !== 'USD') throw safeFailure();
+
   return Object.freeze({
     status,
     identifiedProduct: normalizeIdentifiedProduct(value.identifiedProduct),
+    currentPagePrice,
     lowestPrice: normalizeLowestPrice(value.lowestPrice, priceComparison),
+    savings,
     priceComparison,
     savingsTips: boundedArray(value.savingsTips, 12, 320),
     providerErrors: normalizeProviderErrors(value.providerErrors)
