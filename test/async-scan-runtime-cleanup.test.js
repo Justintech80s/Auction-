@@ -42,3 +42,16 @@ test('shopping sidebar has a terminal no-results message instead of an indefinit
   assert.match(source, /No verified cheaper prices found/);
   assert.match(source, /no_results/);
 });
+
+
+test('popup dispatches price comparison without awaiting the provider response', () => {
+  const source = fs.readFileSync(new URL('../extension/popup/app.js', import.meta.url), 'utf8');
+  assert.match(source, /Promise\.resolve\(runtimeApi\.sendMessage\(request\)\)\.catch/);
+  assert.doesNotMatch(source, /await withTimeout\(runtimeApi\.sendMessage\(request\)\)/);
+});
+
+test('Chrome startup uses the fixed Auction API instead of legacy local backend configuration', () => {
+  const source = fs.readFileSync(new URL('../extension/service-worker.js', import.meta.url), 'utf8');
+  assert.match(source, /https:\/\/auction-jays-list\.vercel\.app\/api\/product-scan/);
+  assert.doesNotMatch(source, /createSharedBackendConfigStore|createLazySharedBackend/);
+});
