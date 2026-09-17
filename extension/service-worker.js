@@ -69,18 +69,10 @@ function sessionStateForSharedStatus(status) {
   return 'error';
 }
 
-function createLazySharedBackend(storageArea) {
-  if (!storageArea) return null;
+const DEFAULT_PRODUCT_SCAN_ENDPOINT = 'https://auction-jays-list.vercel.app/api/product-scan';
 
-  return Object.freeze({
-    async scanProduct(evidence) {
-      const configStore = createSharedBackendConfigStore(storageArea);
-      const endpoint = await configStore.get();
-      if (!endpoint) throw new Error('shared backend unavailable');
-      const backend = createProductSearchBackend({ endpoint });
-      return backend.scanProduct(evidence);
-    }
-  });
+function createServerBackend() {
+  return createProductSearchBackend({ endpoint: DEFAULT_PRODUCT_SCAN_ENDPOINT, timeoutMs: 7000 });
 }
 
 export function createAuctionAnalysisHandler({
