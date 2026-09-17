@@ -9,8 +9,7 @@ const COPY_DIRECTORIES = Object.freeze([
   'content',
   'messaging',
   'popup',
-  'sidepanel',
-  'storage'
+  'sidepanel'
 ]);
 
 const BROWSER_SRC_ENTRIES = Object.freeze([
@@ -83,6 +82,12 @@ export async function buildExtensionPackage({
       { recursive: true }
     );
   }
+
+  await mkdir(path.join(outputDir, 'storage'), { recursive: true });
+  await cp(
+    path.join(extensionRoot, 'storage', 'scan-session.js'),
+    path.join(outputDir, 'storage', 'scan-session.js')
+  );
 
   const serviceWorkerSource = await readFile(
     path.join(extensionRoot, 'service-worker.js'),
