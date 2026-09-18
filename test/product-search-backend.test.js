@@ -89,6 +89,8 @@ test('backend scanProduct returns the website-style shared result contract', asy
             imageUrl: 'https://images.example/dell.jpg',
             confidence: 0.96
           },
+          currentPagePrice: { amount: 449.99, currency: 'USD' },
+          savings: { amount: 38, currency: 'USD' },
           lowestPrice: {
             amount: 399.99,
             currency: 'USD',
@@ -132,7 +134,9 @@ test('backend scanProduct returns the website-style shared result contract', asy
   assert.equal(result.status, 'complete');
   assert.equal(result.identifiedProduct.model, 'Latitude 7420');
   assert.deepEqual(result.identifiedProduct.features, ['16GB RAM', '512GB SSD']);
+  assert.equal(result.currentPagePrice.amount, 449.99);
   assert.equal(result.lowestPrice.amount, 399.99);
+  assert.equal(result.savings.amount, 38);
   assert.equal(result.priceComparison.length, 1);
   assert.equal(result.priceComparison[0].description, 'Exact model match');
   assert.equal(result.priceComparison[0].guardianDecision, 'allow');

@@ -16,7 +16,6 @@ import {
   createMemoryScanSessionStore,
   createScanSessionStore
 } from './storage/scan-session.js';
-import { createSharedBackendConfigStore } from './storage/shared-backend-config.js';
 
 export const SCAN_SESSION_REQUEST = 'AUCTION_SCAN_SESSION_REQUEST';
 export const SCAN_SESSION_STATE = 'AUCTION_SCAN_SESSION_STATE';
@@ -70,18 +69,10 @@ function sessionStateForSharedStatus(status) {
   return 'error';
 }
 
-function createLazySharedBackend(storageArea) {
-  if (!storageArea) return null;
+const DEFAULT_PRODUCT_SCAN_ENDPOINT = 'https://auction-jays-list.vercel.app/api/product-scan';
 
-  return Object.freeze({
-    async scanProduct(evidence) {
-      const configStore = createSharedBackendConfigStore(storageArea);
-      const endpoint = await configStore.get();
-      if (!endpoint) throw new Error('shared backend unavailable');
-      const backend = createProductSearchBackend({ endpoint });
-      return backend.scanProduct(evidence);
-    }
-  });
+function createServerBackend() {
+  return createProductSearchBackend({ endpoint: DEFAULT_PRODUCT_SCAN_ENDPOINT, timeoutMs: 7000 });
 }
 
 export function createAuctionAnalysisHandler({
@@ -413,7 +404,7 @@ export function startChromeAuctionServiceWorker({ chromeLike = globalThis.chrome
   const sessionStore = sessionArea
     ? createScanSessionStore(sessionArea)
     : createMemoryScanSessionStore();
-  const sharedBackend = createLazySharedBackend(chromeLike?.storage?.local);
+  const sharedBackend = createServerBackend();
 
   const worker = createAuctionServiceWorker({
     runtime: chromeRuntime,
