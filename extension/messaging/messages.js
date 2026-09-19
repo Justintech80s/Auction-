@@ -119,6 +119,7 @@ function normalizeScanRequestPayload(payload) {
   if (!Number.isInteger(tabId) || tabId <= 0) throw new TypeError('tabId must be a positive integer');
   return Object.freeze({
     tabId,
+    scanId: nullableBoundedString(payload.scanId, 'scanId', 96),
     evidence: normalizeScanEvidence(payload.evidence, { now: payload.evidence?.capturedAt })
   });
 }
