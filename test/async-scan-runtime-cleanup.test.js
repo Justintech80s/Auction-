@@ -46,7 +46,8 @@ test('shopping sidebar has a terminal no-results message instead of an indefinit
 
 test('popup dispatches price comparison without awaiting the provider response', () => {
   const source = fs.readFileSync(new URL('../extension/popup/app.js', import.meta.url), 'utf8');
-  assert.match(source, /Promise\.resolve\(runtimeApi\.sendMessage\(request\)\)\.catch/);
+  assert.match(source, /Promise\.resolve\(runtimeApi\.sendMessage\(request\)\)\.then/);
+  assert.match(source, /\.catch\(\(\)=>setStatus/);
   assert.doesNotMatch(source, /await withTimeout\(runtimeApi\.sendMessage\(request\)\)/);
 });
 
