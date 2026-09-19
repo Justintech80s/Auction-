@@ -294,6 +294,7 @@ export function createAuctionServiceWorker({
 
     const response = Object.freeze({
       type: SHARED_SCAN_RESULT,
+      scanId: context.scanId,
       payload: sharedResult
     });
     await publishSafely(response);
@@ -302,7 +303,7 @@ export function createAuctionServiceWorker({
 
   async function handleScan(payload) {
     const context = {
-      scanId: scanId(),
+      scanId: payload.scanId || scanId(),
       tabId: payload.tabId,
       sourceUrl: payload.evidence?.sourceUrl ?? null
     };
