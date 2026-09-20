@@ -165,10 +165,20 @@ function savingsMessage(savings, lowest) {
 }
 
 function configuredProviders(env = process.env) {
+  const providers = [];
+
+  const serpApiKey = String(env?.SERPAPI_API_KEY ?? '').trim();
+  if (serpApiKey) {
+    try { providers.push(createSerpApiShoppingProvider({ apiKey: serpApiKey })); } catch {}
+  }
+
   const clientId = String(env?.EBAY_CLIENT_ID ?? '').trim();
   const clientSecret = String(env?.EBAY_CLIENT_SECRET ?? '').trim();
-  if (!clientId || !clientSecret) return [];
-  return [createEbayBrowseProvider({ clientId, clientSecret })];
+  if (clientId && clientSecret) {
+    try { providers.push(createEbayBrowseProvider({ clientId, clientSecret })); } catch {}
+  }
+
+  return providers;
 }
 
 async function configuredCatalog(env = process.env) {
