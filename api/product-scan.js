@@ -1,6 +1,7 @@
 import { searchAcrossStores } from '../src/product-search/search.js';
 import { rankOffers } from '../src/product-search/ranker.js';
 import { createEbayBrowseProvider } from '../src/product-search/providers/ebay-browse.js';
+import { createOpenAiVisionProvider } from '../src/product-search/providers/openai-vision.js';
 import { toCatalogRecords } from '../src/persistence/catalog-records.js';
 import { createPostgresCatalogFromEnv } from '../src/persistence/postgres-runtime.js';
 
@@ -191,12 +192,18 @@ async function persistSafeExactOffers(catalog, evidence, product, offers) {
   }
 }
 
-export async function handleProductScan(payload, { providers = [], catalog = null } = {}) {
+export async function handleProductScan(payload, { providers = [], catalog = null, visualProvider = null } = {}) {
   if (!payload || payload.action !== 'product_scan') {
     return { statusCode: 400, body: { status: 'error' } };
   }
 
-  const evidence = normalizeEvidence(payload.evidence);
+  let evidence = normalizeEvidence(payload.evidence);
+  if (payload?.image?.dataUrl && typeof visualProvider?.identifyProduct === 'function') {
+    try {
+      const vision = await visualProvider.identifyProduct({ dataUrl: payload.image.dataUrl, mimeType: payload.image.mimeType });
+      if (vision?.title) evidence = normalizeEvidence({ ...evidence, ...vision, sourceUrl: evidence.sourceUrl || 'https://auction-jays-list.vercel.app/photo-search' });
+    } catch { /* safe fallback below */ }
+  }
   const product = identifiedProduct(evidence);
   const currentPagePrice = pagePrice(evidence);
 
@@ -273,6 +280,10 @@ export default async function handler(req, res) {
   }
 
   const catalog = await configuredCatalog();
-  const result = await handleProductScan(payload, { providers: configuredProviders(), catalog });
+  let visualProvider = null;
+  if (String(process.env.OPENAI_API_KEY ?? '').trim()) {
+    try { visualProvider = createOpenAiVisionProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.AUCTION_VISION_MODEL || 'gpt-5.6-luna' }); } catch {}
+  }
+  const result = await handleProductScan(payload, { providers: configuredProviders(), catalog, visualProvider });
   return res.status(result.statusCode).json(result.body);
 }
