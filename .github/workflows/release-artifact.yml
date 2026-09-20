@@ -51,7 +51,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: Auction-Browser-Extension-v1.0.0
-          path: Auction-Browser-Extension-v1.0.0.zip
+          path: dist/auction-extension/
           if-no-files-found: error
       - name: Publish ZIP to main
         run: |
