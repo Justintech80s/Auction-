@@ -2,6 +2,7 @@ import { searchAcrossStores } from '../src/product-search/search.js';
 import { rankOffers } from '../src/product-search/ranker.js';
 import { createEbayBrowseProvider } from '../src/product-search/providers/ebay-browse.js';
 import { createOpenAiVisionProvider } from '../src/product-search/providers/openai-vision.js';
+import { createSerpApiShoppingProvider } from '../src/product-search/providers/serpapi-shopping.js';
 import { toCatalogRecords } from '../src/persistence/catalog-records.js';
 import { createPostgresCatalogFromEnv } from '../src/persistence/postgres-runtime.js';
 
