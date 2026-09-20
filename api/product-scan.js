@@ -1,4 +1,5 @@
 import { searchAcrossStores } from '../src/product-search/search.js';
+import { discoverAcrossQueries } from '../src/product-search/discovery.js';
 import { rankOffers } from '../src/product-search/ranker.js';
 import { createEbayBrowseProvider } from '../src/product-search/providers/ebay-browse.js';
 import { createOpenAiVisionProvider } from '../src/product-search/providers/openai-vision.js';
@@ -86,7 +87,6 @@ function identifiedProduct(evidence) {
 }
 
 function identityFromEvidence(evidence) {
-  if (!evidence.sourceUrl) return null;
   const title = evidence.title || evidence.pageTitle;
   if (!title) return null;
   return {
@@ -229,7 +229,7 @@ export async function handleProductScan(payload, { providers = [], catalog = nul
 
   let searched;
   try {
-    searched = await searchAcrossStores(identity, { providers, timeoutMs: 5000 });
+    searched = await discoverAcrossQueries(identity, { providers, searchAcrossStoresImpl: searchAcrossStores });
   } catch {
     searched = { offers: [], providerErrors: [{ source: 'shopping', code: 'provider_unavailable' }] };
   }
