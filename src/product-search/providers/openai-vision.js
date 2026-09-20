@@ -1,0 +1,11 @@
+const ENDPOINT='https://api.openai.com/v1/responses';
+function clean(v,n=160){const s=String(v??'').trim().replace(/\s+/g,' ');return s?s.slice(0,n):null}
+function dataImage(v){const s=String(v??'');return /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(s)&&s.length<=12_000_000?s:null}
+export function createOpenAiVisionProvider({apiKey,model='gpt-5.6-luna',fetchImpl=globalThis.fetch}={}){
+ const key=String(apiKey??'').trim();if(!key)throw new TypeError('OpenAI credentials are required');if(typeof fetchImpl!=='function')throw new TypeError('fetch implementation is required');
+ return Object.freeze({name:'openai-vision',async identifyProduct({dataUrl}={}){
+  const image=dataImage(dataUrl);if(!image)throw new Error('invalid_image');
+  const response=await fetchImpl(ENDPOINT,{method:'POST',headers:{Authorization:`Bearer ${key}`,'Content-Type':'application/json'},body:JSON.stringify({model,input:[{role:'user',content:[{type:'input_text',text:'Identify the retail product in this photo. Return only JSON with title, brand, model, category, identifiers, specs, confidence. Do not guess a model or identifier that is not visible or strongly supported.'},{type:'input_image',image_url:image}]}],text:{format:{type:'json_schema',name:'product_identity',strict:true,schema:{type:'object',properties:{title:{type:['string','null']},brand:{type:['string','null']},model:{type:['string','null']},category:{type:['string','null']},identifiers:{type:'object',additionalProperties:{type:'string'}},specs:{type:'object',additionalProperties:{type:'string'}},confidence:{type:'number'}},required:['title','brand','model','category','identifiers','specs','confidence'],additionalProperties:false}}}})});
+  if(!response.ok)throw new Error('vision_unavailable');const body=await response.json();const raw=body?.output?.flatMap(x=>x.content||[]).find(x=>x.type==='output_text')?.text;if(!raw)throw new Error('vision_invalid_response');const x=JSON.parse(raw);return {title:clean(x.title,240),brand:clean(x.brand,100),model:clean(x.model,100),category:clean(x.category,100),identifiers:x.identifiers&&typeof x.identifiers==='object'?x.identifiers:{},specs:x.specs&&typeof x.specs==='object'?x.specs:{},confidence:Math.max(0,Math.min(1,Number(x.confidence)||0))};
+ }});
+}
