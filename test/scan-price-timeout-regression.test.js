@@ -19,10 +19,10 @@ test('manual scan captures Rawlings-style visible product price and USD currency
   assert.equal(result.observedCurrency, 'USD');
 });
 
-test('popup scan has a bounded timeout and no user-facing Shared backend controls', () => {
+test('popup is limited to opening the photo sidebar and exposes no backend controls', () => {
   const app = fs.readFileSync(new URL('../extension/popup/app.js', import.meta.url), 'utf8');
   const html = fs.readFileSync(new URL('../extension/popup/index.html', import.meta.url), 'utf8');
-  assert.match(app, /timeout/i);
-  assert.doesNotMatch(html, /Shared backend/i);
-  assert.doesNotMatch(app, /createSharedBackendConfigStore/);
+  assert.match(html, /Open Auction Photo Search/);
+  assert.doesNotMatch(html, /Shared backend|Scan This Product/i);
+  assert.doesNotMatch(app, /createSharedBackendConfigStore|scanProduct/);
 });
