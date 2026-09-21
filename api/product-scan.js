@@ -242,17 +242,22 @@ export async function handleProductScan(payload, { providers = [], catalog = nul
     ranked = { offers: [] };
   }
 
-  const safeExact = (ranked.offers ?? []).filter(offer => offer.matchClassification === 'exact' && offer.guardianDecision === 'allow');
-  await persistSafeExactOffers(catalog, evidence, product, safeExact);
+  const allowed = (ranked.offers ?? []).filter(offer => offer.guardianDecision === 'allow' && offer.matchClassification !== 'rejected');
+  const exact = allowed.filter(offer => offer.matchClassification === 'exact');
+  const similar = allowed.filter(offer => offer.matchClassification === 'similar');
+  const displayOffers = [...exact, ...similar]
+    .sort((a, b) => deliveredValue(a) - deliveredValue(b) || b.matchScore - a.matchScore)
+    .slice(0, 12);
+  await persistSafeExactOffers(catalog, evidence, product, exact);
 
-  const comparison = safeExact.map(sharedOffer);
+  const comparison = displayOffers.map(sharedOffer);
   const errors = Array.isArray(searched.providerErrors) ? searched.providerErrors : [];
-  const lowestPrice = lowestSharedOffer(safeExact);
+  const lowestPrice = lowestSharedOffer(displayOffers);
   const savings = savingsFrom(currentPagePrice, lowestPrice);
   const saveTip = savingsMessage(savings, lowestPrice);
 
   let status = 'no_results';
-  if (safeExact.length > 0) status = errors.length > 0 ? 'partial_results' : 'complete';
+  if (displayOffers.length > 0) status = errors.length > 0 ? 'partial_results' : 'complete';
   else if ((searched.offers?.length ?? 0) === 0 && errors.length > 0) status = 'provider_unavailable';
 
   return {
@@ -264,9 +269,9 @@ export async function handleProductScan(payload, { providers = [], catalog = nul
       lowestPrice,
       savings,
       priceComparison: comparison,
-      savingsTips: safeExact.length > 0
-        ? [saveTip, 'Compare delivered totals, condition, seller terms, and return policy before buying.'].filter(Boolean)
-        : ['No safe exact match was found. Try a product page with a clearer model or identifier.'],
+      savingsTips: displayOffers.length > 0
+        ? [saveTip, exact.length ? 'Exact matches are shown first; compare delivered totals, condition, seller terms, and return policy before buying.' : 'These are the closest safe shopping matches found. Confirm the model or variant before buying.'].filter(Boolean)
+        : ['No safe relevant shopping match was found. Try a clearer product photo or visible model/identifier.'],
       providerErrors: errors
     }
   };
