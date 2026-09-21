@@ -122,3 +122,29 @@ Founder, Auction
 8. IP ownership/provenance review.
 9. Security/credential cleanup before repository access.
 10. Transaction asset schedule defining exactly what the buyer receives.
+
+
+## Outreach execution — September 21, 2026
+
+Gmail drafts were prepared with three Auction presentation visuals attached and the consistent acquisition asking price of **$1,250,000 USD, negotiable**.
+
+Drafts prepared for these **verified public contact routes**:
+- Instacart — retailermarketing@instacart.com
+- ShopGeniusAI — hello@shopgeniusai.com
+- HAMAR — hello@gethamar.com
+- Vorena — hello@vorena.ai
+- Curiella — hello@curiella.com
+- Kea Labs — hi@kealabs.com
+- Mearch AI — contact@mearch.ai
+- Optio-AI — info@optio-ai.com
+- Buy Buddy — info@buybuddyai.com
+- Pricifly — priciflyai@gmail.com
+
+Each draft is tailored to the recipient's publicly described product direction. The attached visuals cover:
+1. Auction platform/acquisition overview.
+2. Auction website and browser-extension workflow.
+3. Auction browser extension in a shopping-page context before product-image submission.
+
+**Important:** Presentation visuals are illustrative/concept materials and should not be represented as independently verified production screenshots or live retailer-price evidence. Live functionality, integrations, metrics, and asset ownership should be demonstrated separately during diligence.
+
+The repository remains the technical reference: https://github.com/Justintech80s/Auction-
