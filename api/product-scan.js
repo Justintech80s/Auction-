@@ -4,6 +4,7 @@ import { rankOffers } from '../src/product-search/ranker.js';
 import { createEbayBrowseProvider } from '../src/product-search/providers/ebay-browse.js';
 import { createOpenAiVisionProvider } from '../src/product-search/providers/openai-vision.js';
 import { createSerpApiShoppingProvider } from '../src/product-search/providers/serpapi-shopping.js';
+import { createSerpApiLensProvider } from '../src/product-search/providers/serpapi-lens.js';
 import { toCatalogRecords } from '../src/persistence/catalog-records.js';
 import { createPostgresCatalogFromEnv } from '../src/persistence/postgres-runtime.js';
 
@@ -292,7 +293,11 @@ export default async function handler(req, res) {
 
   const catalog = await configuredCatalog();
   let visualProvider = null;
-  if (String(process.env.OPENAI_API_KEY ?? '').trim()) {
+  const serpApiKey = String(process.env.SERPAPI_API_KEY ?? '').trim();
+  if (serpApiKey) {
+    try { visualProvider = createSerpApiLensProvider({ apiKey: serpApiKey }); } catch {}
+  }
+  if (!visualProvider && String(process.env.OPENAI_API_KEY ?? '').trim()) {
     try { visualProvider = createOpenAiVisionProvider({ apiKey: process.env.OPENAI_API_KEY, model: process.env.AUCTION_VISION_MODEL || 'gpt-5.6-luna' }); } catch {}
   }
   const result = await handleProductScan(payload, { providers: configuredProviders(), catalog, visualProvider });
