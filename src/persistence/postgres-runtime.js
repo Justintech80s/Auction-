@@ -14,6 +14,11 @@ function validatedConnectionString(value) {
   }
 }
 
+function boundedInt(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
 export async function createPostgresCatalogFromEnv({
   env = {},
   importPg = () => import('pg')
@@ -28,11 +33,13 @@ export async function createPostgresCatalogFromEnv({
   const Pool = pg?.Pool ?? pg?.default?.Pool;
   if (typeof Pool !== 'function') throw new Error('database_driver_unavailable');
 
+  // Keep persistence optional and fail fast. Live product search must never wait
+  // on a slow/paused Postgres/Supabase project.
   const pool = new Pool({
     connectionString,
-    max: 3,
-    idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 5_000,
+    max: boundedInt(env?.AUCTION_DB_POOL_MAX, 3, 1, 10),
+    idleTimeoutMillis: boundedInt(env?.AUCTION_DB_IDLE_TIMEOUT_MS, 5_000, 1_000, 30_000),
+    connectionTimeoutMillis: boundedInt(env?.AUCTION_DB_CONNECT_TIMEOUT_MS, 1_500, 250, 5_000),
     allowExitOnIdle: true
   });
 
