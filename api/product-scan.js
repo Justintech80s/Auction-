@@ -11,6 +11,7 @@ import { createPostgresCatalogFromEnv } from '../src/persistence/postgres-runtim
 const MAX_TEXT = 240;
 const MAX_FEATURES = 12;
 let catalogPromise = null;
+const DB_INIT_TIMEOUT_MS = 1_750;
 
 function cleanText(value, max = MAX_TEXT) {
   if (typeof value !== 'string') return null;
@@ -187,7 +188,13 @@ async function configuredCatalog(env = process.env) {
   if (!catalogPromise) {
     catalogPromise = createPostgresCatalogFromEnv({ env }).catch(() => null);
   }
-  return catalogPromise;
+
+  // Persistence is an enhancement, never a prerequisite for live shopping.
+  // If Postgres/Supabase is paused, unreachable, or slow, continue without it.
+  return Promise.race([
+    catalogPromise,
+    new Promise(resolve => setTimeout(() => resolve(null), DB_INIT_TIMEOUT_MS))
+  ]);
 }
 
 async function persistSafeExactOffers(catalog, evidence, product, offers) {
